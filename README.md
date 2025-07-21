@@ -1,1 +1,1 @@
-# admin.foodeez.ch
+# Business Management For Platform Foodeez
