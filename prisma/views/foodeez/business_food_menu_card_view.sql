@@ -1,0 +1,35 @@
+SELECT
+  row_number() OVER (
+    ORDER BY
+      `x`.`BUSINESS_ID`,
+      `y`.`BUSINESS_FOOD_MENU_CARD_ID`
+  ) AS `ROW_NUMBER`,
+  `x`.`BUSINESS_ID` AS `BUSINESS_ID`,
+  `x`.`BUSINESS_NAME` AS `BUSINESS_NAME`,
+  `x`.`DESCRIPTION` AS `DESCRIPTION`,
+  `x`.`ADDRESS_STREET` AS `ADDRESS_STREET`,
+  `x`.`ADDRESS_ZIP` AS `ADDRESS_ZIP`,
+  `x`.`ADDRESS_TOWN` AS `ADDRESS_TOWN`,
+  `x`.`PHONE_NUMBER_SHORT` AS `PHONE_NUMBER_SHORT`,
+  `x`.`EMAIL_ADDRESS` AS `EMAIL_ADDRESS`,
+  `x`.`WHATSAPP_NUMBER` AS `WHATSAPP_NUMBER`,
+  `x`.`WEB_ADDRESS` AS `WEB_ADDRESS`,
+  `x`.`LOGO` AS `LOGO`,
+  `x`.`GOOGLE_PROFILE` AS `GOOGLE_PROFILE`,
+  `x`.`IMAGE_URL` AS `IMAGE_URL`,
+  `y`.`BUSINESS_FOOD_MENU_CARD_ID` AS `BUSINESS_FOOD_MENU_CARD_ID`,
+  `y`.`TITLE` AS `MENU_NAME`
+FROM
+  (
+    `foodeez`.`business` `x`
+    LEFT JOIN `foodeez`.`business_food_menu_card` `y` ON(
+      (
+        (`x`.`BUSINESS_ID` = `y`.`BUSINESS_ID`)
+        AND (`y`.`VALID_FROM` <= NOW())
+        AND (0 <> IFNULL(`y`.`VALID_TO`,(NOW() >= NOW())))
+      )
+    )
+  )
+ORDER BY
+  `ROW_NUMBER`,
+  `y`.`BUSINESS_FOOD_MENU_CARD_ID`

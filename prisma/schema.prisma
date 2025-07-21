@@ -1,0 +1,809 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../node_modules/.prisma/client"
+  previewFeatures = ["views"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model adlinks {
+  ADLINK_ID         Int       @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  BUSINESS_NAME     String?   @db.VarChar(255)
+  LOGO_FILE         String?   @db.VarChar(1000)
+  WEB_ADDRESS       String?   @db.VarChar(1000)
+  APPROVED          Int?
+  SEQ               Int?
+  DATE_FROM         DateTime? @db.DateTime(0)
+  DATE_TO           DateTime? @db.DateTime(0)
+  ACTIVE            Int?
+}
+
+model business {
+  BUSINESS_ID        Int                @id @default(autoincrement())
+  CREATION_DATETIME  DateTime           @db.DateTime(0)
+  BUSINESS_NAME      String?            @db.VarChar(255)
+  SHORT_NAME         String?            @db.VarChar(20)
+  DESCRIPTION        String?            @db.VarChar(1000)
+  ADDRESS_STREET     String?            @db.VarChar(100)
+  ADDRESS_ZIP        BigInt?
+  ADDRESS_CITY_ID    Int?
+  ADDRESS_TOWN       String?            @db.VarChar(100)
+  ADDRESS_COUNTRY    String?            @db.VarChar(100)
+  PHONE_NUMBER       String?            @db.VarChar(45)
+  PHONE_NUMBER_SHORT String?            @db.VarChar(45)
+  EMAIL_ADDRESS      String?            @db.VarChar(255)
+  WHATSAPP_NUMBER    String?            @db.VarChar(45)
+  WEB_ADDRESS        String?            @db.VarChar(1000)
+  LOGO               String?            @db.VarChar(255)
+  FACEBOOK_LINK      String?            @db.VarChar(1000)
+  INSTA_LINK         String?            @db.VarChar(1000)
+  TIKTOK_LINK        String?            @db.VarChar(1000)
+  GOOGLE_PROFILE     String?            @db.VarChar(1000)
+  IMAGE_URL          String?            @db.VarChar(1000)
+  GOOGLE_RATING      String?            @db.VarChar(10)
+  WHATSAPP_LINK      String?            @db.VarChar(255)
+  APPROVED           Int?               @default(0) @db.TinyInt
+  STATUS             Int?               @default(0) @db.TinyInt
+  business_product   business_product[]
+}
+
+model business_2_business_category {
+  BUSINESS_2_BUSINESS_CATEGORY_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME               DateTime? @db.DateTime(0)
+  BUSINESS_ID                     BigInt?
+  BUSINESS_CATEGORY_ID            BigInt?
+  STATUS                          Int?      @db.TinyInt
+  DISPLAY_SEQ                     Int?
+}
+
+model business_2_food_type {
+  BUSINESS_2_FOOD_TYPE_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME       DateTime? @db.DateTime(0)
+  BUSINESS_ID             BigInt?
+  FOOD_TYPE_ID            BigInt?
+}
+
+model business_category {
+  BUSINESS_CATEGORY_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME    DateTime? @db.DateTime(0)
+  CATEGORY_NAME        String?   @db.VarChar(100)
+}
+
+model business_food_menu_card {
+  BUSINESS_FOOD_MENU_CARD_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME          DateTime? @db.DateTime(0)
+  BUSINESS_ID                Int?
+  TITLE                      String?   @db.VarChar(45)
+  VALID_FROM                 DateTime? @db.DateTime(0)
+  VALID_TO                   DateTime? @db.DateTime(0)
+}
+
+model business_food_menu_card_detail {
+  BUSINESS_FOOD_MENU_CARD_DETAIL_ID Int  @id @default(autoincrement())
+  BUSINESS_FOOD_MENU_CARD_ID        Int?
+  BUSINESS_PRODUCT_CATEGORY_ID      Int?
+  DISPLAY_ORDER                     Int? @default(1)
+  STATUS                            Int? @default(1) @db.TinyInt
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model business_order {
+  BUSINESS_ORDER_ID     Int       @id
+  CREATION_DATETIME     DateTime? @db.DateTime(0)
+  BUSINESS_ID           Int?
+  VISITOR_ID            Int?      @default(0)
+  PAYMENT_DONE          Int?      @default(1) @db.TinyInt
+  PAYMENT_MODE          String?   @db.VarChar(45)
+  DELIVERY_ET           DateTime? @db.DateTime(0)
+  ORDER_STATUS          Int?      @default(1)
+  DELIVERY_DATETIME     DateTime? @db.DateTime(0)
+  TERMINAL              String?   @db.VarChar(100)
+  STAFF_MEMBER          String?   @db.VarChar(100)
+  FIRST_NAME            String?   @db.VarChar(100)
+  LAST_NAME             String?   @db.VarChar(100)
+  ADDRESS_STREET        String?   @db.VarChar(100)
+  ADDRESS_ZIP           String?   @db.VarChar(10)
+  ADDRESS_TOWN          String?   @db.VarChar(100)
+  ADDRESS_COUNTRY_CODE  String?   @default("CH") @db.VarChar(45)
+  PHONE_NUMBER          String?   @db.VarChar(20)
+  EMAIL_ADDRESS         String?   @db.VarChar(255)
+  ORDER_GROSS_AMOUNT    Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_TAX_AMOUNT      Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_NET_AMOUNT      Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_DISCOUNT_AMOUNT Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_AMOUNT          Decimal?  @default(0.00) @db.Decimal(8, 2)
+  SHIPPING_CHARGES      Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_REFUND_AMOUNT   Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_FINAL_AMOUNT    Decimal?  @default(0.00) @db.Decimal(8, 2)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model business_order_detail {
+  BUSINESS_ORDER_DETAIL_ID Int       @id
+  CREATION_DATETIME        DateTime? @db.DateTime(0)
+  BUSINESS_ORDER_ID        Int?
+  BUSINESS_PRODUCT_ID      Int?
+  ORDER_QUANTITY           Int?
+  QUANTITY_DELIVERED       Int?
+  PRODUCT_SELL_PRICE       Decimal?  @db.Decimal(8, 2)
+  PRODUCT_DISCOUNT         Decimal?  @db.Decimal(8, 2)
+  PRODUCT_PRICE            Decimal?  @db.Decimal(8, 2)
+  QUANTITY_BALANCE         Int?      @default(0)
+  QUANTITY__REFUND         Int?      @default(0) @map("QUANTITY:_REFUND")
+}
+
+model business_owner {
+  BUSINESS_OWNER_ID   Int      @id @unique(map: "CUSTOMER_ID_UNIQUE") @default(autoincrement())
+  CREATION_DATETIME   DateTime @db.DateTime(0)
+  VISITORS_ACCOUNT_ID Int?
+  MOBILE_PHONE        String?  @db.VarChar(45)
+  ADDRESS_STREET      String?  @db.VarChar(100)
+  ADDRESS_NO          Int?
+  ADDRESS_ZIP         BigInt?
+  ADDRESS_TOWN        String?  @db.VarChar(100)
+  ADDRESS_COUNTRY     String?  @db.VarChar(100)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model business_owner_2_business {
+  BUSINESS_OWNER_2_BUSINESS_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME            DateTime? @db.DateTime(0)
+  BUSINESS_OWNER_ID            BigInt?
+  BUSINESS_ID                  BigInt?
+  STATUS                       Int?      @default(0) @db.TinyInt
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model business_product {
+  BUSINESS_PRODUCT_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME   DateTime? @db.DateTime(0)
+  BUSINESS_ID         Int?
+  TITLE               String    @db.VarChar(100)
+  DESCRIPTION         String?   @db.VarChar(1000)
+  COST_PRICE          Decimal?  @default(0.00) @db.Decimal(6, 2)
+  PRODUCT_PRICE       Decimal   @db.Decimal(6, 2)
+  COMPARE_AS_PRICE    Decimal?  @default(0.00) @db.Decimal(6, 2)
+  TRACK_INVENTORY     Int?      @default(0) @db.TinyInt
+  INVENTORY_ON_HAND   Int?      @default(0)
+  INVENTORY_AVAILABLE Int?      @default(0)
+  INVENTORY_COMMITED  Int?      @default(0)
+  WEIGHT              Int?      @default(0)
+  WEIGHT_UNIT         String?   @default("gm") @db.VarChar(10)
+  STATUS              Int?      @default(1) @db.TinyInt
+  PIC                 String?   @db.VarChar(255)
+  business            business? @relation(fields: [BUSINESS_ID], references: [BUSINESS_ID], onDelete: NoAction, onUpdate: NoAction, map: "BUSINESS_ID")
+
+  @@index([BUSINESS_ID], map: "BUSINESS_ID_idx")
+}
+
+model business_product_2_tag {
+  BUSINESS_PRODUCT_2_TAG_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME         DateTime? @db.DateTime(0)
+  BUSINESS_PRODUCT_ID       Int?
+  BUSINESS_PRODUCT_TAG_ID   Int?
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model business_product_category {
+  BUSINESS_PRODUCT_CATEGORY_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME            DateTime? @db.DateTime(0)
+  BUSINESS_ID                  Int?
+  TITLE                        String?   @db.VarChar(45)
+  DESCRIPTION                  String?   @db.VarChar(255)
+  PIC                          String?   @db.VarChar(255)
+  STATUS                       Int?      @default(1) @db.TinyInt
+}
+
+model business_product_category_2_tag {
+  BUSINESS_PRODUCT_CATEGORY_2_TAG_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME                  DateTime? @db.DateTime(0)
+  BUSINESS_PRODUCT_CATEGORY_ID       Int?
+  BUSINESS_PRODUCT_TAG_ID            Int?
+}
+
+model business_product_tag {
+  BUSINESS_PRODUCT_TAG_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME       DateTime? @db.DateTime(0)
+  BUSINESS_ID             Int?
+  TITLE                   String?   @db.VarChar(45)
+}
+
+model business_rating {
+  BUSINESS_RATING_ID BigInt    @id
+  CREATION_DATETIME  DateTime? @db.DateTime(0)
+  BUSINESS_ID        BigInt?
+  BUSINESS_RATING    Int?
+}
+
+model business_reviews {
+  BUSINESS_REVIEWS_ID BigInt    @id @default(autoincrement())
+  CREATION_DATETIME   DateTime? @db.DateTime(0)
+  REVIEWER_NAME       String?   @db.VarChar(255)
+  RATING              Int?
+  REVIEW              String?   @db.VarChar(1000)
+  PIC_1               String?   @db.VarChar(255)
+  PIC_2               String?   @db.VarChar(255)
+  PIC_3               String?   @db.VarChar(255)
+}
+
+model city {
+  CITY_ID           BigInt    @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  CITY_CODE         String?   @db.VarChar(2)
+  CITY_NAME         String?   @db.VarChar(100)
+}
+
+model city_town {
+  CITY_TWON_ID      BigInt    @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  CITY_ID           BigInt?
+  CITY_CODE         String?   @db.VarChar(2)
+  ZIPCODE           Int?
+  TOWN              String?   @db.VarChar(100)
+  E                 Float?
+  H                 Float?
+  LANGUAGE          String?   @db.Text
+}
+
+model food_category {
+  FOOD_CATEGORY_ID  BigInt    @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  TITLE             String?   @db.VarChar(45)
+  DESCRIPTION       String?   @db.VarChar(255)
+}
+
+model food_menu {
+  FOOD_MENU_ID      Int       @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  BUSINESS_ID       BigInt?
+  FOOD_CATEGORY_ID  BigInt?
+  TITLE             String?   @db.VarChar(255)
+  STATUS            Int?      @db.TinyInt
+}
+
+model food_menu_items {
+  FOOD_MENU_ITEMS_ID BigInt    @id
+  CREATION_DATETIME  DateTime? @db.DateTime(0)
+  FOOD_MENU_ID       BigInt?
+  MENU_CATEGORY_ID   BigInt?
+  TITLE              String?   @db.VarChar(100)
+  DESCRIPTION        String?   @db.VarChar(255)
+  PRICE              Float?    @db.Float
+  CURRENCY           String?   @db.VarChar(45)
+  PIC_1              String?   @db.VarChar(255)
+  PIC_2              String?   @db.VarChar(255)
+  PIC_3              String?   @db.VarChar(255)
+  APPROVED           Int?      @db.TinyInt
+  DISPLAY            Int?      @db.TinyInt
+}
+
+model food_type {
+  FOOD_TYPE_ID      BigInt    @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  TITLE             String?   @db.VarChar(45)
+  DESCRIPTION       String?   @db.VarChar(255)
+}
+
+model foodeez_ranking {
+  FOODEEZ_RANKING   Int       @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  BUSINESS_ID       Int?
+  RANKING           Int?      @default(1)
+}
+
+model foodeez_review {
+  FOODEEZ_REVIEW_ID BigInt    @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  REVIEWER_NAME     String?   @db.VarChar(255)
+  REVIEWER_EMAIL    String?   @db.VarChar(100)
+  AVATAR            String?   @db.VarChar(100)
+  RATING            Int?      @default(5)
+  REVIEW            String?   @default("Excellent & very helpfull plaform.") @db.VarChar(1000)
+  PIC_1             String?   @db.VarChar(255)
+  PIC_2             String?   @db.VarChar(255)
+  PIC_3             String?   @db.VarChar(255)
+  APPROVED          Int?      @default(0) @db.TinyInt
+}
+
+model foodeez_subscription {
+  FOODEEZ_SUBSCRIPTION_ID BigInt    @id
+  CREATION_DATETIME       DateTime? @db.DateTime(0)
+  EMAIL_ADDRESS           String?   @db.VarChar(255)
+}
+
+model menu_category {
+  MENU_CATEGORY_ID  Int       @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  BUSINESS_ID       Int?
+  TITLE             String?   @db.VarChar(255)
+  SHOW              Int?      @default(1) @db.TinyInt
+  DISPLAY_SEQ       Int?
+}
+
+model owner_2_business {
+  CUSTOMER_BUSINESS_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME    DateTime? @db.DateTime(0)
+  BUSINESS_OWNER_ID    BigInt?
+  BUSINESS_ID          BigInt?
+  STATUS               Int?      @db.TinyInt
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model reserve_table {
+  RESERVE_TABLE_ID    Int       @id @default(autoincrement())
+  CREATION_DATETIME   DateTime? @db.DateTime(0)
+  BUSINESS_ID         Int?
+  RESERVATION_SOURCE  Int?      @default(1)
+  VISITOR_ID          Int?      @default(0)
+  RESERVATION_AS_NAME String?   @db.VarChar(100)
+  EMAIL_ADDRESS       String?   @db.VarChar(255)
+  PHONE_NUMBER        String?   @db.VarChar(20)
+  RESERVATION_FOR     String?   @db.VarChar(100)
+  REMARKS             String?   @db.VarChar(255)
+  RESERVATION_DATE    DateTime? @db.Date
+  EXPECTED_TIME       String?   @db.VarChar(45)
+  RESERVATION_NUMBER  Int?
+  REMINDER_1          Int?
+  REMINDER_2          Int?
+  STATUS              Int?      @default(1)
+  ADMIN_REMARKS       String?   @db.VarChar(100)
+}
+
+model top_events {
+  TOP_EVENTS_ID     Int       @id @default(autoincrement())
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  TITLE             String?   @db.VarChar(100)
+  ADDRESS           String?   @db.VarChar(100)
+  DATE_1            DateTime? @db.Date
+  TIME_1_FROM       String?   @db.VarChar(45)
+  TIME_1_TO         String?   @db.VarChar(45)
+  DATE_2            DateTime? @db.Date
+  TIME_2_FROM       String?   @db.VarChar(45)
+  TIME_2_TO         String?   @db.VarChar(45)
+  DATE_3            DateTime? @db.Date
+  TIME_3_FROM       String?   @db.VarChar(45)
+  TIME_3_TO         String?   @db.VarChar(45)
+  DATE_4            DateTime? @db.Date
+  TIME_4_FROM       String?   @db.VarChar(45)
+  TIME_4_TO         String?   @db.VarChar(45)
+  DATE_5            DateTime? @db.Date
+  TIME_5_FROM       String?   @db.VarChar(45)
+  TIME_5_TO         String?   @db.VarChar(45)
+  HREF              String?   @db.VarChar(255)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model visitor_business_review {
+  VISITOR_BUSINESS_REVIEW_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME          DateTime? @db.DateTime(0)
+  VISITORS_ACCOUNT_ID        Int
+  BUSINESS_ID                Int
+  RATING                     String    @default("5") @db.VarChar(10)
+  REMARKS                    String    @default("Excellent") @db.VarChar(1000)
+  PIC_1                      String?   @db.VarChar(255)
+  PIC_2                      String?   @db.VarChar(255)
+  PIC_3                      String?   @db.VarChar(255)
+  PIC_4                      String?   @db.VarChar(255)
+  PIC_5                      String?   @db.VarChar(255)
+  PIC_6                      String?   @db.VarChar(255)
+  PIC_7                      String?   @db.VarChar(255)
+  PIC_8                      String?   @db.VarChar(255)
+  PIC_9                      String?   @db.VarChar(255)
+  PIC_10                     String?   @db.VarChar(255)
+  VIDEO_1                    String?   @db.VarChar(255)
+  LIKE_COUNT                 Int?      @default(1)
+  APPROVED                   Int?      @default(0) @db.TinyInt
+}
+
+model visitor_favorite_restaurants {
+  VISITOR_FAVORITE_RESTAURANTS_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME               DateTime? @db.DateTime(0)
+  VISITORS_ACCOUNT_ID             Int?
+  BUSINESS_ID                     Int?
+}
+
+model visitor_followed_events {
+  VISITOR_FOLLOWED_EVENTS_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME          DateTime? @db.DateTime(0)
+  VISITORS_ACCOUNT_ID        Int?
+  UPCOMING_EVENTS_ID         Int?
+}
+
+model visitor_followed_restaurants {
+  VISITOR_FOLLOWED_RESTAURANTS_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME               DateTime? @db.DateTime(0)
+  VISITORS_ACCOUNT_ID             Int?
+  BUSINESS_ID                     Int?
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model visitor_food_journey {
+  VISITOR_FOOD_JOURNEY_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME       DateTime? @db.DateTime(0)
+  VISITORS_ACCOUNT_ID     Int?      @default(0)
+  VISITOR_NAME            String?   @db.VarChar(100)
+  VISITOR_PIC             String?   @db.VarChar(100)
+  VISITOR_EMAIL_ADDRESS   String?   @db.VarChar(100)
+  TITLE                   String?   @db.VarChar(255)
+  DESCRIPTION             String?   @db.VarChar(1000)
+  RESTAURANT_NAME         String?   @db.VarChar(100)
+  ADDRESS_GOOGLE_URL      String?   @db.VarChar(255)
+  PIC_1                   String?   @db.VarChar(255)
+  PIC_2                   String?   @db.VarChar(255)
+  PIC_3                   String?   @db.VarChar(255)
+  APPROVED                Int?      @default(0) @db.TinyInt
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model visitor_product_review {
+  VISITOR_PRODUCT_REVIEW_ID Int       @id @default(autoincrement())
+  CREATION_DATETIME         DateTime? @db.DateTime(0)
+  VISITORS_ACCOUNT_ID       Int
+  BUSINESS_PRODUCT_ID       Int
+  RATING                    String    @default("5") @db.VarChar(10)
+  REMARKS                   String    @default("Excellent") @db.VarChar(1000)
+  PIC_1                     String?   @db.VarChar(255)
+  PIC_2                     String?   @db.VarChar(255)
+  PIC_3                     String?   @db.VarChar(255)
+  PIC_4                     String?   @db.VarChar(255)
+  PIC_5                     String?   @db.VarChar(255)
+  PIC_6                     String?   @db.VarChar(255)
+  PIC_7                     String?   @db.VarChar(255)
+  PIC_8                     String?   @db.VarChar(255)
+  PIC_9                     String?   @db.VarChar(255)
+  PIC_10                    String?   @db.VarChar(255)
+  VIDEO_1                   String?   @db.VarChar(255)
+  LIKE_COUNT                Int?      @default(1)
+  APPROVED                  Int?      @default(0) @db.TinyInt
+}
+
+model visitors_account {
+  VISITORS_ACCOUNT_ID BigInt    @id @default(autoincrement())
+  CREATION_DATETIME   DateTime? @db.DateTime(0)
+  EMAIL_ADDRESS       String?   @unique @db.VarChar(255)
+  PASSWORD            String?   @db.VarChar(255)
+  FIRST_NAME          String?   @db.VarChar(45)
+  LAST_NAME           String?   @db.VarChar(45)
+  LANGUAGE            String?   @db.VarChar(45)
+  PIC                 String?   @db.VarChar(255)
+  RESET_TOKEN         String?   @db.VarChar(255)
+  RESET_TOKEN_EXPIRY  DateTime? @db.DateTime(0)
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view adlink_view {
+  ADLINK_ID     Int     @default(0)
+  BUSINESS_NAME String? @db.VarChar(255)
+  LOGO_FILE     String? @db.VarChar(1000)
+  WEB_ADDRESS   String? @db.VarChar(1000)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view business_2_business_category_view {
+  BUSINESS_CATEGORY_ID Int     @default(0)
+  CATEGORY_NAME        String? @db.VarChar(100)
+  BUSINESS_ID          BigInt?
+  STATUS               Int?    @db.TinyInt
+  DISPLAY_SEQ          Int?
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view business_category_view {
+  CNT                  BigInt  @default(0)
+  BUSINESS_CATEGORY_ID Int     @default(0)
+  CATEGORY_NAME        String? @db.VarChar(100)
+  CATEGORY             String? @db.VarChar(100)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view business_detail_view_all {
+  BUSINESS_ID             Int     @default(0)
+  BUSINESS_NAME           String? @db.VarChar(255)
+  SHORT_NAME              String? @db.VarChar(20)
+  DESCRIPTION             String? @db.VarChar(1000)
+  ADDRESS_STREET          String? @db.VarChar(100)
+  ADDRESS_ZIP             BigInt?
+  ADDRESS_TOWN            String? @db.VarChar(100)
+  ADDRESS_CITY_ID         Int?
+  CITY_CODE               String? @db.VarChar(2)
+  CITY_NAME               String? @db.VarChar(100)
+  EMAIL_ADDRESS           String? @db.VarChar(255)
+  ADDRESS_COUNTRY         String? @db.VarChar(100)
+  PHONE_NUMBER            String? @db.VarChar(45)
+  WHATSAPP_NUMBER         String? @db.VarChar(45)
+  WEB_ADDRESS             String? @db.VarChar(1000)
+  LOGO                    String? @db.VarChar(255)
+  FACEBOOK_LINK           String? @db.VarChar(1000)
+  INSTA_LINK              String? @db.VarChar(1000)
+  TIKTOK_LINK             String? @db.VarChar(1000)
+  GOOGLE_PROFILE          String? @db.VarChar(1000)
+  IMAGE_URL               String? @db.VarChar(1000)
+  GOOGLE_RATING           String? @db.VarChar(10)
+  APPROVED                Int?    @default(0) @db.TinyInt
+  STATUS                  Int?    @default(0) @db.TinyInt
+  RANKING                 BigInt  @default(0)
+  VEGAN                   Int     @default(0)
+  VEGETARIAN              Int     @default(0)
+  HALAL                   Int     @default(0)
+  CAN_RESERVE_TABLE       Int     @default(0)
+  HAVING_ACTIVE_MENU_CARD Int     @default(0)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view business_detail_view_halal {
+  BUSINESS_ID             Int     @default(0)
+  BUSINESS_NAME           String? @db.VarChar(255)
+  SHORT_NAME              String? @db.VarChar(20)
+  DESCRIPTION             String? @db.VarChar(1000)
+  ADDRESS_STREET          String? @db.VarChar(100)
+  ADDRESS_ZIP             BigInt?
+  ADDRESS_TOWN            String? @db.VarChar(100)
+  ADDRESS_CITY_ID         Int?
+  CITY_CODE               String? @db.VarChar(2)
+  CITY_NAME               String? @db.VarChar(100)
+  EMAIL_ADDRESS           String? @db.VarChar(255)
+  ADDRESS_COUNTRY         String? @db.VarChar(100)
+  PHONE_NUMBER            String? @db.VarChar(45)
+  WHATSAPP_NUMBER         String? @db.VarChar(45)
+  WEB_ADDRESS             String? @db.VarChar(1000)
+  LOGO                    String? @db.VarChar(255)
+  FACEBOOK_LINK           String? @db.VarChar(1000)
+  INSTA_LINK              String? @db.VarChar(1000)
+  TIKTOK_LINK             String? @db.VarChar(1000)
+  GOOGLE_PROFILE          String? @db.VarChar(1000)
+  IMAGE_URL               String? @db.VarChar(1000)
+  GOOGLE_RATING           String? @db.VarChar(10)
+  APPROVED                Int?    @default(0) @db.TinyInt
+  STATUS                  Int?    @default(0) @db.TinyInt
+  RANKING                 BigInt  @default(0)
+  VEGAN                   Int     @default(0)
+  VEGETARIAN              Int     @default(0)
+  HALAL                   Int     @default(0)
+  CAN_RESERVE_TABLE       Int     @default(0)
+  HAVING_ACTIVE_MENU_CARD Int     @default(0)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view business_detail_view_vegan {
+  BUSINESS_ID             Int     @default(0)
+  BUSINESS_NAME           String? @db.VarChar(255)
+  SHORT_NAME              String? @db.VarChar(20)
+  DESCRIPTION             String? @db.VarChar(1000)
+  ADDRESS_STREET          String? @db.VarChar(100)
+  ADDRESS_ZIP             BigInt?
+  ADDRESS_TOWN            String? @db.VarChar(100)
+  ADDRESS_CITY_ID         Int?
+  CITY_CODE               String? @db.VarChar(2)
+  CITY_NAME               String? @db.VarChar(100)
+  EMAIL_ADDRESS           String? @db.VarChar(255)
+  ADDRESS_COUNTRY         String? @db.VarChar(100)
+  PHONE_NUMBER            String? @db.VarChar(45)
+  WHATSAPP_NUMBER         String? @db.VarChar(45)
+  WEB_ADDRESS             String? @db.VarChar(1000)
+  LOGO                    String? @db.VarChar(255)
+  FACEBOOK_LINK           String? @db.VarChar(1000)
+  INSTA_LINK              String? @db.VarChar(1000)
+  TIKTOK_LINK             String? @db.VarChar(1000)
+  GOOGLE_PROFILE          String? @db.VarChar(1000)
+  IMAGE_URL               String? @db.VarChar(1000)
+  GOOGLE_RATING           String? @db.VarChar(10)
+  APPROVED                Int?    @default(0) @db.TinyInt
+  STATUS                  Int?    @default(0) @db.TinyInt
+  RANKING                 BigInt  @default(0)
+  VEGAN                   Int     @default(0)
+  VEGETARIAN              Int     @default(0)
+  HALAL                   Int     @default(0)
+  CAN_RESERVE_TABLE       Int     @default(0)
+  HAVING_ACTIVE_MENU_CARD Int     @default(0)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view business_detail_view_vegetarian {
+  BUSINESS_ID             Int     @default(0)
+  BUSINESS_NAME           String? @db.VarChar(255)
+  SHORT_NAME              String? @db.VarChar(20)
+  DESCRIPTION             String? @db.VarChar(1000)
+  ADDRESS_STREET          String? @db.VarChar(100)
+  ADDRESS_ZIP             BigInt?
+  ADDRESS_TOWN            String? @db.VarChar(100)
+  ADDRESS_CITY_ID         Int?
+  CITY_CODE               String? @db.VarChar(2)
+  CITY_NAME               String? @db.VarChar(100)
+  EMAIL_ADDRESS           String? @db.VarChar(255)
+  ADDRESS_COUNTRY         String? @db.VarChar(100)
+  PHONE_NUMBER            String? @db.VarChar(45)
+  WHATSAPP_NUMBER         String? @db.VarChar(45)
+  WEB_ADDRESS             String? @db.VarChar(1000)
+  LOGO                    String? @db.VarChar(255)
+  FACEBOOK_LINK           String? @db.VarChar(1000)
+  INSTA_LINK              String? @db.VarChar(1000)
+  TIKTOK_LINK             String? @db.VarChar(1000)
+  GOOGLE_PROFILE          String? @db.VarChar(1000)
+  IMAGE_URL               String? @db.VarChar(1000)
+  GOOGLE_RATING           String? @db.VarChar(10)
+  APPROVED                Int?    @default(0) @db.TinyInt
+  STATUS                  Int?    @default(0) @db.TinyInt
+  RANKING                 BigInt  @default(0)
+  VEGAN                   Int     @default(0)
+  VEGETARIAN              Int     @default(0)
+  HALAL                   Int     @default(0)
+  CAN_RESERVE_TABLE       Int     @default(0)
+  HAVING_ACTIVE_MENU_CARD Int     @default(0)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view business_having_active_menu_card_view {
+  BUSINESS_ID Int?
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+view visitor_business_review_view {
+  VISITOR_BUSINESS_REVIEW_ID Int       @default(0)
+  CREATION_DATETIME          DateTime? @db.DateTime(0)
+  VISITORS_ACCOUNT_ID        Int
+  FIRST_NAME                 String?   @db.VarChar(45)
+  LAST_NAME                  String?   @db.VarChar(45)
+  PIC                        String?   @db.VarChar(255)
+  BUSINESS_ID                Int
+  RATING                     String    @default("5") @db.VarChar(10)
+  REMARKS                    String    @db.Text
+  PIC_1                      String?   @db.VarChar(255)
+  PIC_2                      String?   @db.VarChar(255)
+  PIC_3                      String?   @db.VarChar(255)
+  PIC_4                      String?   @db.VarChar(255)
+  PIC_5                      String?   @db.VarChar(255)
+  PIC_6                      String?   @db.VarChar(255)
+  PIC_7                      String?   @db.VarChar(255)
+  PIC_8                      String?   @db.VarChar(255)
+  PIC_9                      String?   @db.VarChar(255)
+  PIC_10                     String?   @db.VarChar(255)
+  VIDEO_1                    String?   @db.VarChar(255)
+  LIKE_COUNT                 Int?      @default(1)
+  APPROVED                   Int?      @default(0) @db.TinyInt
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view visitor_favorite_restaurants_view {
+  VISITOR_FAVORITE_RESTAURANTS_ID Int       @default(0)
+  CREATION_DATETIME               DateTime? @db.DateTime(0)
+  VISITORS_ACCOUNT_ID             Int?
+  BUSINESS_ID                     Int?
+  BUSINESS_NAME                   String?   @db.VarChar(255)
+  DESCRIPTION                     String?   @db.VarChar(1000)
+  LOGO                            String?   @db.VarChar(255)
+  IMAGE_URL                       String?   @db.VarChar(1000)
+  CITY_NAME                       String?   @db.VarChar(100)
+  ADDRESS_TOWN                    String?   @db.VarChar(100)
+  GOOGLE_PROFILE                  String?   @db.VarChar(1000)
+  WEB_ADDRESS                     String?   @db.VarChar(1000)
+  PHONE_NUMBER_SHORT              String?   @db.VarChar(45)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view foodeez_review_view {
+  FOODEEZ_REVIEW_ID BigInt    @default(0)
+  CREATION_DATETIME DateTime? @db.DateTime(0)
+  REVIEWER_NAME     String?   @db.VarChar(255)
+  REVIEWER_EMAIL    String?   @db.VarChar(100)
+  AVATAR            String?   @db.VarChar(100)
+  RATING            Int?      @default(5)
+  REVIEW            String?   @default("Excellent & very helpfull plaform.") @db.VarChar(1000)
+  PIC_1             String?   @db.VarChar(255)
+  PIC_2             String?   @db.VarChar(255)
+  PIC_3             String?   @db.VarChar(255)
+  APPROVED          Int?      @default(0) @db.TinyInt
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view top_events_view {
+  TOP_EVENTS_ID Int       @default(0)
+  TITLE         String?   @db.VarChar(100)
+  ADDRESS       String?   @db.VarChar(100)
+  DATE_1        DateTime? @db.Date
+  TIME_1_FROM   String?   @db.VarChar(45)
+  TIME_1_TO     String?   @db.VarChar(45)
+  DATE_2        DateTime? @db.Date
+  TIME_2_FROM   String?   @db.VarChar(45)
+  TIME_2_TO     String?   @db.VarChar(45)
+  DATE_3        DateTime? @db.Date
+  TIME_3_FROM   String?   @db.VarChar(45)
+  TIME_3_TO     String?   @db.VarChar(45)
+  DATE_4        DateTime? @db.Date
+  TIME_4_FROM   String?   @db.VarChar(45)
+  TIME_4_TO     String?   @db.VarChar(45)
+  DATE_5        DateTime? @db.Date
+  TIME_5_FROM   String?   @db.VarChar(45)
+  TIME_5_TO     String?   @db.VarChar(45)
+  HREF          String?   @db.VarChar(255)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+view visitor_food_journey_view {
+  VISITOR_FOOD_JOURNEY_ID Int     @default(0)
+  VISITORS_ACCOUNT_ID     Int?    @default(0)
+  VISITOR_NAME            String  @default("") @db.VarChar(100)
+  VISITOR_PIC             String? @db.VarChar(100)
+  VISITOR_EMAIL_ADDRESS   String  @default("") @db.VarChar(100)
+  TITLE                   String? @db.VarChar(255)
+  DESCRIPTION             String? @db.VarChar(1000)
+  RESTAURANT_NAME         String  @default("") @db.VarChar(100)
+  ADDRESS_GOOGLE_URL      String? @db.VarChar(255)
+  PIC_1                   String? @db.VarChar(255)
+  PIC_2                   String? @db.VarChar(255)
+  PIC_3                   String? @db.VarChar(255)
+  APPROVED                Int?    @default(0) @db.TinyInt
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+view business_food_menu_card_view {
+  ROW_NUMBER                 BigInt  @default(0) @db.UnsignedBigInt
+  BUSINESS_ID                Int     @default(0)
+  BUSINESS_NAME              String? @db.VarChar(255)
+  DESCRIPTION                String? @db.VarChar(1000)
+  ADDRESS_STREET             String? @db.VarChar(100)
+  ADDRESS_ZIP                BigInt?
+  ADDRESS_TOWN               String? @db.VarChar(100)
+  PHONE_NUMBER_SHORT         String? @db.VarChar(45)
+  EMAIL_ADDRESS              String? @db.VarChar(255)
+  WHATSAPP_NUMBER            String? @db.VarChar(45)
+  WEB_ADDRESS                String? @db.VarChar(1000)
+  LOGO                       String? @db.VarChar(255)
+  GOOGLE_PROFILE             String? @db.VarChar(1000)
+  IMAGE_URL                  String? @db.VarChar(1000)
+  BUSINESS_FOOD_MENU_CARD_ID Int?    @default(0)
+  MENU_NAME                  String? @db.VarChar(45)
+
+  @@ignore
+}
+
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+view business_food_menu_card_detail_view {
+  ROW_NUMBER                   BigInt   @default(0) @db.UnsignedBigInt
+  BUSINESS_ID                  Int      @default(0)
+  BUSINESS_NAME                String?  @db.VarChar(255)
+  BUSINESS_FOOD_MENU_CARD_ID   Int      @default(0)
+  MENU_NAME                    String?  @db.VarChar(45)
+  BUSINESS_PRODUCT_CATEGORY_ID Int?
+  CATEGORY                     String?  @db.VarChar(45)
+  BUSINESS_PRODUCT_ID          Int      @default(0)
+  PRODUCT_NAME                 String   @db.VarChar(100)
+  PRODUCT_DESCRIPTION          String   @db.Text
+  PRODUCT_PRICE                Decimal  @db.Decimal(6, 2)
+  COMPARE_AS_PRICE             Decimal? @default(0.00) @db.Decimal(6, 2)
+  PIC                          String   @default("") @db.VarChar(255)
+
+  @@ignore
+}

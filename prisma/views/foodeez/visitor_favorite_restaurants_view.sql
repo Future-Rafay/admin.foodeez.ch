@@ -1,0 +1,27 @@
+SELECT
+  `a`.`VISITOR_FAVORITE_RESTAURANTS_ID` AS `VISITOR_FAVORITE_RESTAURANTS_ID`,
+  `a`.`CREATION_DATETIME` AS `CREATION_DATETIME`,
+  `a`.`VISITORS_ACCOUNT_ID` AS `VISITORS_ACCOUNT_ID`,
+  `a`.`BUSINESS_ID` AS `BUSINESS_ID`,
+  `b`.`BUSINESS_NAME` AS `BUSINESS_NAME`,
+  `b`.`DESCRIPTION` AS `DESCRIPTION`,
+  `b`.`LOGO` AS `LOGO`,
+  `b`.`IMAGE_URL` AS `IMAGE_URL`,
+  `c`.`CITY_NAME` AS `CITY_NAME`,
+  `b`.`ADDRESS_TOWN` AS `ADDRESS_TOWN`,
+  `b`.`GOOGLE_PROFILE` AS `GOOGLE_PROFILE`,
+  `b`.`WEB_ADDRESS` AS `WEB_ADDRESS`,
+  `b`.`PHONE_NUMBER_SHORT` AS `PHONE_NUMBER_SHORT`
+FROM
+  (
+    (
+      `foodeez`.`visitor_favorite_restaurants` `a`
+      JOIN `foodeez`.`business` `b`
+    )
+    JOIN `foodeez`.`city` `c`
+  )
+WHERE
+  (
+    (`a`.`BUSINESS_ID` = `b`.`BUSINESS_ID`)
+    AND (`b`.`ADDRESS_CITY_ID` = `c`.`CITY_ID`)
+  )
