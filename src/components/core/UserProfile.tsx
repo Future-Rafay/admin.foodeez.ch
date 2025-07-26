@@ -45,7 +45,7 @@ export default function UserProfile({ session }: UserProfileProps) {
   };
 
   const items = [
-    { label: "Update Profile", href: "/dashboard/profile", icon: <Settings className="w-4 h-4 mr-2" /> },
+    // { label: "Update Profile", href: "/dashboard/profile", icon: <Settings className="w-4 h-4 mr-2" /> },
     { label: "Switch Business", href: "/dashboard/", icon: <Building2 className="w-4 h-4 mr-2" /> },
     {
       label: "Sign Out",

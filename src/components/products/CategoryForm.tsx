@@ -1,63 +1,47 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { business_product_category } from "@prisma/client";
-import { useBusinessId } from "@/components/providers/BusinessProvider";
+import { Switch } from "@/components/ui/switch";
 import { uploadImagesToStrapi } from "@/services/HelperFunctions";
 
-interface ProductFormProps {
+interface CategoryFormProps {
   mode: "add" | "edit";
   initialValues?: {
     title?: string;
     description?: string;
-    product_price?: string | number;
     pic?: string;
-    category_id?: number;
+    status?: number;
   };
   onSubmit: (values: { 
     title: string; 
     description: string; 
-    product_price: string; 
     pic: string;
-    category_id?: number;
+    status: number;
   }) => Promise<void>;
   loading?: boolean;
   error?: string;
 }
 
-export default function ProductForm({ mode, initialValues, onSubmit, loading, error }: ProductFormProps) {
-  const businessId = useBusinessId();
+export default function CategoryForm({ mode, initialValues, onSubmit, loading, error }: CategoryFormProps) {
   const [form, setForm] = useState({
     title: initialValues?.title || "",
     description: initialValues?.description || "",
-    product_price: initialValues?.product_price?.toString() || "",
     pic: initialValues?.pic || "",
-    category_id: initialValues?.category_id || undefined,
+    status: initialValues?.status ?? 1,
   });
-  const [categories, setCategories] = useState<business_product_category[]>([]);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!businessId) return;
-    fetch(`/api/categories?businessId=${businessId}`)
-      .then(res => res.json())
-      .then(data => setCategories(data))
-      .catch(() => console.error("Failed to load categories"));
-  }, [businessId]);
-
   function validate() {
     if (!form.title.trim()) return "Title is required.";
-    if (!form.product_price.trim() || isNaN(Number(form.product_price))) return "Valid price is required.";
-    if (form.title.length > 100) return "Title must be at most 100 characters.";
-    if (form.description.length > 1000) return "Description must be at most 1000 characters.";
+    if (form.title.length > 45) return "Title must be at most 45 characters.";
+    if (form.description.length > 255) return "Description must be at most 255 characters.";
     if (form.pic.length > 255) return "Image URL must be at most 255 characters.";
     return null;
   }
@@ -108,9 +92,8 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
     await onSubmit({
       title: form.title.trim(),
       description: form.description.trim(),
-      product_price: form.product_price.trim(),
       pic: form.pic.trim(),
-      category_id: form.category_id,
+      status: form.status,
     });
   }
 
@@ -118,8 +101,8 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   }
 
-  function handleCategoryChange(value: string) {
-    setForm(f => ({ ...f, category_id: value ? Number(value) : undefined }));
+  function handleStatusChange(checked: boolean) {
+    setForm(f => ({ ...f, status: checked ? 1 : 0 }));
   }
 
   return (
@@ -136,14 +119,14 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
       )}
       
       <div>
-        <Label htmlFor="title">Product Name</Label>
+        <Label htmlFor="title">Category Name</Label>
         <Input
           id="title"
           name="title"
           value={form.title}
           onChange={handleChange}
-          placeholder="Enter product name"
-          maxLength={100}
+          placeholder="Enter category name"
+          maxLength={45}
           required
           className="text-lg py-3 px-4 mt-1"
         />
@@ -156,47 +139,15 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
           name="description"
           value={form.description}
           onChange={handleChange}
-          placeholder="Enter product description"
-          maxLength={1000}
-          rows={5}
+          placeholder="Enter category description"
+          maxLength={255}
+          rows={3}
           className="text-base py-3 px-4 mt-1"
         />
       </div>
 
       <div>
-        <Label htmlFor="product_price">Price (CHF)</Label>
-        <Input
-          id="product_price"
-          name="product_price"
-          type="number"
-          min="0"
-          step="0.01"
-          value={form.product_price}
-          onChange={handleChange}
-          placeholder="e.g. 16.50"
-          required
-          className="text-lg py-3 px-4 mt-1"
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="category">Category</Label>
-        <Select value={form.category_id?.toString() || ""} onValueChange={handleCategoryChange}>
-          <SelectTrigger className="text-base py-3 px-4 mt-1">
-            <SelectValue placeholder="Select a category (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map(category => (
-              <SelectItem key={category.BUSINESS_PRODUCT_CATEGORY_ID} value={category.BUSINESS_PRODUCT_CATEGORY_ID.toString()}>
-                {category.TITLE}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label htmlFor="image">Product Image</Label>
+        <Label htmlFor="image">Category Image</Label>
         <div className="space-y-4 mt-1">
           {/* Image upload */}
           <div className="flex flex-col gap-2">
@@ -225,7 +176,7 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
             <div className="relative w-32 h-32 border rounded-lg overflow-hidden">
               <img
                 src={imagePreview || form.pic}
-                alt="Product preview"
+                alt="Category preview"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -247,12 +198,21 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
         </div>
       </div>
 
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="status"
+          checked={form.status === 1}
+          onCheckedChange={handleStatusChange}
+        />
+        <Label htmlFor="status">Active Category</Label>
+      </div>
+
       <Button 
         type="submit" 
         className="bg-foodeez-primary text-white hover:bg-foodeez-secondary text-lg py-3 mt-2" 
         disabled={loading || uploadingImage}
       >
-        {loading ? (mode === "add" ? "Adding..." : "Saving...") : (mode === "add" ? "Add Product" : "Save Changes")}
+        {loading ? (mode === "add" ? "Adding..." : "Saving...") : (mode === "add" ? "Add Category" : "Save Changes")}
       </Button>
     </form>
   );

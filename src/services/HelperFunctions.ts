@@ -1,5 +1,6 @@
 "use server"
 
+import { SerializedProduct } from "@/components/products/ProductTable";
 import prisma from "@/lib/prisma";
 import { business_detail_view_all, business_order, business_owner, business_owner_2_business, business_product } from "@prisma/client";
 
@@ -41,7 +42,14 @@ export async function getBusinessProducts(businessId: number) {
                 CREATION_DATETIME: 'desc'
             }
         });
-        return products as business_product[];
+        const safeProducts = products.map(product => ({
+            ...product,
+            COST_PRICE: product?.COST_PRICE?.toNumber(),
+            PRODUCT_PRICE: product?.PRODUCT_PRICE?.toNumber(),
+            COMPARE_AS_PRICE: product?.COMPARE_AS_PRICE?.toNumber(),
+        }));
+        return safeProducts as SerializedProduct[];
+
     } catch (error) {
         console.error("Error fetching business products:", error);
         return [];

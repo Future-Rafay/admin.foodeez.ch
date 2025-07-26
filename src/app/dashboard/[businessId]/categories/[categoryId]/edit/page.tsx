@@ -1,64 +1,62 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import ProductForm from "@/components/products/ProductForm";
+import CategoryForm from "@/components/products/CategoryForm";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
 
-export default function EditProductPage() {
+export default function EditCategoryPage() {
   const router = useRouter();
   const params = useParams();
   const businessId = useBusinessId();
-  const productId = params?.productId as string;
+  const categoryId = params?.categoryId as string;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [product, setProduct] = useState<any>(null);
+  const [category, setCategory] = useState<any>(null);
 
   useEffect(() => {
-    if (!businessId || !productId) return;
+    if (!businessId || !categoryId) return;
     setLoading(true);
-    fetch(`/api/products?businessId=${businessId}`)
+    fetch(`/api/categories?businessId=${businessId}`)
       .then(res => res.json())
       .then(data => {
-        const found = data.find((p: any) => String(p.BUSINESS_PRODUCT_ID) === String(productId));
-        setProduct(found);
+        const found = data.find((c: any) => String(c.BUSINESS_PRODUCT_CATEGORY_ID) === String(categoryId));
+        setCategory(found);
         setLoading(false);
       })
       .catch(() => {
-        setError("Failed to load product");
+        setError("Failed to load category");
         setLoading(false);
       });
-  }, [businessId, productId]);
+  }, [businessId, categoryId]);
 
   async function handleEdit(values: { 
     title: string; 
     description: string; 
-    product_price: string; 
     pic: string;
-    category_id?: number;
+    status: number;
   }) {
     setSaving(true);
     setError("");
     try {
-      const res = await fetch("/api/products", {
+      const res = await fetch("/api/categories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: Number(productId),
+          id: Number(categoryId),
           title: values.title,
           description: values.description,
-          product_price: values.product_price,
           pic: values.pic,
-          category_id: values.category_id,
+          status: values.status,
         }),
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to update product");
+        throw new Error(data.error || "Failed to update category");
       }
       router.push(`/dashboard/${businessId}/products`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update product");
+      setError(err instanceof Error ? err.message : "Failed to update category");
     } finally {
       setSaving(false);
     }
@@ -67,21 +65,20 @@ export default function EditProductPage() {
   if (loading) {
     return <div className="text-center text-gray-400 py-8">Loading...</div>;
   }
-  if (!product) {
-    return <div className="text-center text-red-500 py-8">Product not found.</div>;
+  if (!category) {
+    return <div className="text-center text-red-500 py-8">Category not found.</div>;
   }
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-6">Edit Product</h1>
-      <ProductForm
+      <h1 className="text-2xl font-bold mb-6">Edit Category</h1>
+      <CategoryForm
         mode="edit"
         initialValues={{
-          title: product.TITLE,
-          description: product.DESCRIPTION,
-          product_price: product.PRODUCT_PRICE,
-          pic: product.PIC,
-          category_id: product.BUSINESS_PRODUCT_CATEGORY_ID,
+          title: category.TITLE,
+          description: category.DESCRIPTION,
+          pic: category.PIC,
+          status: category.STATUS,
         }}
         onSubmit={handleEdit}
         loading={saving}

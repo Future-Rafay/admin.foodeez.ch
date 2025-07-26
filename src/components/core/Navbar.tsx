@@ -35,7 +35,7 @@ const Navbar = () => {
     const NAV_LINKS = [
         { name: "Home", href:`/dashboard/${businessId}`  },
         { name: "Products", href: `/dashboard/${businessId}/products` },
-        { name: "Settings", href:  `/dashboard/${businessId}/settings`  },
+        // { name: "Settings", href:  `/dashboard/${businessId}/settings`  },
     ];
 
     return (

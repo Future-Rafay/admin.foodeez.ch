@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import DashboardNavbar from "@/components/core/DashboardNavbar";
 import DashboardFooter from "@/components/core/DashboardFooter";
+import DashboardBreadcrumb from "@/components/core/DashboardBreadcrumb";
 import { useSetBusinessId } from "@/components/providers/BusinessProvider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -290,6 +291,9 @@ export default function DashboardRootPage() {
   return (
     <div className="min-h-screen flex flex-col max-w-[1440px] mx-auto">
       <DashboardNavbar />
+      <div className="px-4 sm:px-6 lg:px-8 py-4">
+        <DashboardBreadcrumb />
+      </div>
       <DashboardContent />
       <DashboardFooter />
     </div>

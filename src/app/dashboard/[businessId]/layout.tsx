@@ -1,5 +1,6 @@
 import Navbar from "@/components/core/Navbar";
 import Footer from "@/components/core/Footer";
+import DashboardBreadcrumb from "@/components/core/DashboardBreadcrumb";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -16,6 +17,9 @@ export default function RootLayout({
         <div className="max-w-[1440px] mx-auto">
             <Navbar />
             <div className="min-h-screen">
+                <div className="px-4 sm:px-6 lg:px-8 py-4">
+                    <DashboardBreadcrumb />
+                </div>
                 {children}
             </div>
             <Footer />
