@@ -1,6 +1,6 @@
 "use client";
 
-import { useBusinessId } from "@/components/ui/providers/BusinessProvider";
+import { useBusinessId } from "@/components/providers/BusinessProvider";
 import Image from "next/image";
 import Link from "next/link";
 

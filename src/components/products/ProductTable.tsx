@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import DeleteProductModal from "./DeleteProductModal";
 import { business_product } from "@prisma/client";
-import { useBusinessId } from "@/components/ui/providers/BusinessProvider";
+import { useBusinessId } from "@/components/providers/BusinessProvider";
 
 export default function ProductTable() {
   const router = useRouter();

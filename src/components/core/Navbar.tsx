@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import React from 'react'
 import { useSession } from 'next-auth/react';
 import { Session } from 'next-auth';
-import { useBusinessId } from '@/components/ui/providers/BusinessProvider';
+import { useBusinessId } from '@/components/providers/BusinessProvider';
 import UserProfile from './UserProfile';
 
 const Navbar = () => {

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import ProductForm from "@/components/products/ProductForm";
-import { useBusinessId } from "@/components/ui/providers/BusinessProvider";
+import { useBusinessId } from "@/components/providers/BusinessProvider";
 
 export default function EditProductPage() {
   const router = useRouter();
