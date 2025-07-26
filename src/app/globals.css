@@ -4,6 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-foodeez-primary: var( --foodeez-primary);
+  --color-foodeez-secondary: var( --foodeez-secondary);
+  --color-foodeez-accent: var( --foodeez-accent);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -44,6 +47,9 @@
 }
 
 :root {
+  --foodeez-primary :#FF4D00 ;
+  --foodeez-secondary :#F87C1D ;
+  --foodeez-accent : #733500;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -79,6 +85,9 @@
 }
 
 .dark {
+  --foodeez-primary :#CC3A00 ;
+  --foodeez-secondary :#C65F10 ;
+  --foodeez-accent :#4A1F00 ;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
