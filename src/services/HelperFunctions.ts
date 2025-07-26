@@ -13,14 +13,12 @@ export async function getBusinessOwner(businessOwnerId: number) {
 }
 
 export async function getBusinessIds(businessOwnerId: number) {
-    console.log(`getBusinessIds: ${businessOwnerId}`)
     const businesses = await prisma.business_owner_2_business.findMany({
         where: {
             BUSINESS_OWNER_ID: businessOwnerId,
         },
     });
-    console.log(`getBusinessIds: ${businesses}`)
-    return businesses;
+    return businesses as business_owner_2_business[];
 }
 
 export async function getBusinessesDetails(businessId: number) {

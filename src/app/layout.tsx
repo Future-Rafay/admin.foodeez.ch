@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { BusinessProvider } from "@/components/providers/BusinessProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -13,7 +14,6 @@ const poppins = Poppins({
   subsets: ["latin"],
   variable: "--font-poppins",
 });
-
 
 export const metadata: Metadata = {
   title: "Admin | Foodeez",
@@ -32,7 +32,9 @@ export default function RootLayout({
         className={`${inter.variable} ${poppins.variable} antialiased`}
       >
         <AuthProvider>
-          {children}
+          <BusinessProvider>
+            {children}
+          </BusinessProvider>
         </AuthProvider>
       </body>
     </html>

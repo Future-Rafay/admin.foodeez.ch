@@ -6,6 +6,7 @@ import Link from "next/link";
 
 export default function DashboardPage() {
     const businessId = useBusinessId();
+    console.log(businessId)
  
     
   const summary = {

@@ -9,7 +9,7 @@ export default function DashboardNavbar() {
   const user = session?.user;
 
   return (
-    <nav className="w-full flex items-center justify-between px-8 py-4 bg-white shadow-sm max-w-[1440px] mx-auto">
+    <nav className="w-full flex items-center justify-between px-8 py-4 bg-white shadow-sm">
       <div className="flex items-center">
         <Image src="/images/Logo/LogoFoodeezMain.svg" alt="Foodeez Logo" width={120} height={40} />
       </div>
