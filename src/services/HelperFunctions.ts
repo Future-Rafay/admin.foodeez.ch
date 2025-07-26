@@ -1,7 +1,7 @@
 "use server"
 
 import prisma from "@/lib/prisma";
-import { business_detail_view_all, business_owner, business_owner_2_business } from "@prisma/client";
+import { business_detail_view_all, business_order, business_owner, business_owner_2_business, business_product } from "@prisma/client";
 
 export async function getBusinessOwner(businessOwnerId: number) {
     const owner = await prisma.business_owner.findFirst({
@@ -21,7 +21,7 @@ export async function getBusinessIds(businessOwnerId: number) {
     return businesses as business_owner_2_business[];
 }
 
-export async function getBusinessesDetails(businessId: number) {
+export async function getBusinessDetail(businessId: number) {
     const businesses = await prisma.business_detail_view_all.findMany({
         where: {
             BUSINESS_ID: businessId,
@@ -30,7 +30,40 @@ export async function getBusinessesDetails(businessId: number) {
     return businesses as business_detail_view_all[];
 }
 
+export async function getBusinessProducts(businessId: number) {
+    try {
+        const products = await prisma.business_product.findMany({
+            where: {
+                BUSINESS_ID: businessId,
+                STATUS: 1
+            },
+            orderBy: {
+                CREATION_DATETIME: 'desc'
+            }
+        });
+        return products as business_product[];
+    } catch (error) {
+        console.error("Error fetching business products:", error);
+        return [];
+    }
+}
 
+export async function getBusinessOrders(businessId: number) {
+    try {
+        const orders = await prisma.business_order.findMany({
+            where: {
+                BUSINESS_ID: businessId,
+            },
+            orderBy: {
+                CREATION_DATETIME: 'desc'
+            }
+        });
+        return orders as business_order[];
+    } catch (error) {
+        console.error("Error fetching business orders:", error);
+        return [];
+    }
+}
 
 const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || '';
 const STRAPI_API_TOKEN = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN || process.env.STRAPI_API_TOKEN || '';

@@ -14,7 +14,6 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string) {
   });
 } 
 
-
 export async function POST(request: Request) {
   try {
     const { email } = await request.json();

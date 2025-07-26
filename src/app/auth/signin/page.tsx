@@ -81,7 +81,7 @@ export default function SignInPage() {
             </div>
 
             <div className="text-right text-sm">
-              <a href="/forgot-password" className=" hover:underline">
+              <a href="/auth/forgot-password" className=" hover:underline">
                 Forgot password?
               </a>
             </div>

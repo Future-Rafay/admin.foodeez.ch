@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getBusinessIds, getBusinessOwner, getBusinessesDetails } from "@/services/HelperFunctions";
+import { getBusinessIds, getBusinessOwner, getBusinessDetail} from "@/services/HelperFunctions";
 import { business_owner, business_owner_2_business, business_detail_view_all } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -244,7 +244,7 @@ function DashboardContent() {
         // Get details for each business
         const businessesWithDetails = await Promise.all(
           businessesData.map(async (business) => {
-            const details = await getBusinessesDetails(Number(business.BUSINESS_ID));
+            const details = await getBusinessDetail(Number(business.BUSINESS_ID));
             return {
               ...business,
               details: details[0] || null
