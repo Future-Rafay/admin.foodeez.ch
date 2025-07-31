@@ -33,6 +33,7 @@ export async function getBusinessDetail(businessId: number) {
 
 export async function getBusinessProducts(businessId: number) {
     try {
+        // First get all products
         const products = await prisma.business_product.findMany({
             where: {
                 BUSINESS_ID: businessId,
@@ -42,13 +43,35 @@ export async function getBusinessProducts(businessId: number) {
                 CREATION_DATETIME: 'desc'
             }
         });
-        const safeProducts = products.map(product => ({
-            ...product,
-            COST_PRICE: product?.COST_PRICE?.toNumber(),
-            PRODUCT_PRICE: product?.PRODUCT_PRICE?.toNumber(),
-            COMPARE_AS_PRICE: product?.COMPARE_AS_PRICE?.toNumber(),
-        }));
-        return safeProducts as SerializedProduct[];
+
+        // Then get all product-tag relationships
+        const productIds = products.map(p => p.BUSINESS_PRODUCT_ID);
+        const productTags = await prisma.business_product_2_tag.findMany({
+            where: { BUSINESS_PRODUCT_ID: { in: productIds } },
+        });
+
+        // Get all unique tag IDs
+        const tagIds = [...new Set(productTags.map(pt => pt.BUSINESS_PRODUCT_TAG_ID).filter((id): id is number => id !== null))];
+        const tags = await prisma.business_product_tag.findMany({
+            where: { BUSINESS_PRODUCT_TAG_ID: { in: tagIds } },
+        });
+
+        // Combine the data
+        const productsWithTags = products.map(product => {
+            const safeProduct = {
+                ...product,
+                COST_PRICE: product?.COST_PRICE?.toNumber(),
+                PRODUCT_PRICE: product?.PRODUCT_PRICE?.toNumber(),
+                COMPARE_AS_PRICE: product?.COMPARE_AS_PRICE?.toNumber(),
+                tags: productTags
+                    .filter(pt => pt.BUSINESS_PRODUCT_ID === product.BUSINESS_PRODUCT_ID)
+                    .map(pt => tags.find(t => t.BUSINESS_PRODUCT_TAG_ID === pt.BUSINESS_PRODUCT_TAG_ID))
+                    .filter(Boolean)
+            };
+            return safeProduct;
+        });
+
+        return productsWithTags as SerializedProduct[];
 
     } catch (error) {
         console.error("Error fetching business products:", error);

@@ -35,7 +35,7 @@ export default function EditProductPage() {
     description: string; 
     product_price: string; 
     pic: string;
-    category_id?: number;
+    tag_ids: number[];
   }) {
     setSaving(true);
     setError("");
@@ -49,7 +49,7 @@ export default function EditProductPage() {
           description: values.description,
           product_price: values.product_price,
           pic: values.pic,
-          category_id: values.category_id,
+          tag_ids: values.tag_ids,
         }),
       });
       if (!res.ok) {
@@ -81,7 +81,7 @@ export default function EditProductPage() {
           description: product.DESCRIPTION,
           product_price: product.PRODUCT_PRICE,
           pic: product.PIC,
-          category_id: product.BUSINESS_PRODUCT_CATEGORY_ID,
+          tag_ids: product.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) || [],
         }}
         onSubmit={handleEdit}
         loading={saving}

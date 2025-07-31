@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { uploadImagesToStrapi } from "@/services/HelperFunctions";
+import TagSelect from "./TagSelect";
 
 interface CategoryFormProps {
   mode: "add" | "edit";
@@ -15,12 +16,16 @@ interface CategoryFormProps {
     description?: string;
     pic?: string;
     status?: number;
+    tag_ids?: number[];
   };
   onSubmit: (values: { 
     title: string; 
     description: string; 
     pic: string;
     status: number;
+    tag_ids: number[];
+    hasPendingImage?: boolean;
+    pendingImageFile?: File;
   }) => Promise<void>;
   loading?: boolean;
   error?: string;
@@ -32,6 +37,7 @@ export default function CategoryForm({ mode, initialValues, onSubmit, loading, e
     description: initialValues?.description || "",
     pic: initialValues?.pic || "",
     status: initialValues?.status ?? 1,
+    tag_ids: initialValues?.tag_ids || [],
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -89,12 +95,29 @@ export default function CategoryForm({ mode, initialValues, onSubmit, loading, e
       await handleImageUpload();
     }
 
-    await onSubmit({
-      title: form.title.trim(),
-      description: form.description.trim(),
-      pic: form.pic.trim(),
-      status: form.status,
-    });
+    const hasNewImage = !!imageFile;
+    const currentPicUrl = form.pic.trim();
+    
+    if (hasNewImage) {
+      await onSubmit({
+        title: form.title.trim(),
+        description: form.description.trim(),
+        pic: currentPicUrl,
+        status: form.status,
+        tag_ids: form.tag_ids,
+        hasPendingImage: true,
+        pendingImageFile: imageFile,
+      });
+    } else {
+      await onSubmit({
+        title: form.title.trim(),
+        description: form.description.trim(),
+        pic: currentPicUrl,
+        status: form.status,
+        tag_ids: form.tag_ids,
+        hasPendingImage: false,
+      });
+    }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -198,6 +221,16 @@ export default function CategoryForm({ mode, initialValues, onSubmit, loading, e
         </div>
       </div>
 
+      <div>
+        <Label htmlFor="tags">Tags</Label>
+        <div className="mt-1">
+          <TagSelect
+            selectedTags={form.tag_ids}
+            onTagsChange={(tagIds) => setForm(f => ({ ...f, tag_ids: tagIds }))}
+          />
+        </div>
+      </div>
+
       <div className="flex items-center space-x-2">
         <Switch
           id="status"
@@ -216,4 +249,4 @@ export default function CategoryForm({ mode, initialValues, onSubmit, loading, e
       </Button>
     </form>
   );
-} 
+}

@@ -5,10 +5,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { business_product_category } from "@prisma/client";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
 import { uploadImagesToStrapi } from "@/services/HelperFunctions";
+import TagSelect from "./TagSelect";
 
 interface ProductFormProps {
   mode: "add" | "edit";
@@ -17,14 +16,16 @@ interface ProductFormProps {
     description?: string;
     product_price?: string | number;
     pic?: string;
-    category_id?: number;
+    tag_ids?: number[];
   };
   onSubmit: (values: { 
     title: string; 
     description: string; 
     product_price: string; 
     pic: string;
-    category_id?: number;
+    tag_ids: number[];
+    hasPendingImage?: boolean;
+    pendingImageFile?: File;
   }) => Promise<void>;
   loading?: boolean;
   error?: string;
@@ -37,21 +38,14 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
     description: initialValues?.description || "",
     product_price: initialValues?.product_price?.toString() || "",
     pic: initialValues?.pic || "",
-    category_id: initialValues?.category_id || undefined,
+    tag_ids: initialValues?.tag_ids || [],
   });
-  const [categories, setCategories] = useState<business_product_category[]>([]);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!businessId) return;
-    fetch(`/api/categories?businessId=${businessId}`)
-      .then(res => res.json())
-      .then(data => setCategories(data))
-      .catch(() => console.error("Failed to load categories"));
-  }, [businessId]);
+
 
   function validate() {
     if (!form.title.trim()) return "Title is required.";
@@ -100,27 +94,40 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
     }
     setFormError(null);
 
-    // Upload image if there's a new file
-    if (imageFile) {
-      await handleImageUpload();
-    }
-
-    await onSubmit({
-      title: form.title.trim(),
-      description: form.description.trim(),
-      product_price: form.product_price.trim(),
-      pic: form.pic.trim(),
-      category_id: form.category_id,
-    });
+    // Submit form data immediately (without waiting for image upload)
+    const hasNewImage = !!imageFile;
+    const currentPicUrl = form.pic.trim();
+    
+          // If there's a new image, we'll upload it in background
+      if (hasNewImage) {
+        // Submit with current pic URL (or empty), image will be updated later
+        await onSubmit({
+          title: form.title.trim(),
+          description: form.description.trim(),
+          product_price: form.product_price.trim(),
+          pic: currentPicUrl, // Use current URL, will be updated after Strapi upload
+          tag_ids: form.tag_ids,
+          hasPendingImage: true, // Flag to indicate background image upload needed
+          pendingImageFile: imageFile, // Pass the file for background upload
+        });
+      } else {
+        // No new image, submit normally
+        await onSubmit({
+          title: form.title.trim(),
+          description: form.description.trim(),
+          product_price: form.product_price.trim(),
+          pic: currentPicUrl,
+          tag_ids: form.tag_ids,
+          hasPendingImage: false,
+        });
+      }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   }
 
-  function handleCategoryChange(value: string) {
-    setForm(f => ({ ...f, category_id: value ? Number(value) : undefined }));
-  }
+
 
   return (
     <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
@@ -179,21 +186,7 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
         />
       </div>
 
-      <div>
-        <Label htmlFor="category">Category</Label>
-        <Select value={form.category_id?.toString() || ""} onValueChange={handleCategoryChange}>
-          <SelectTrigger className="text-base py-3 px-4 mt-1">
-            <SelectValue placeholder="Select a category (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map(category => (
-              <SelectItem key={category.BUSINESS_PRODUCT_CATEGORY_ID} value={category.BUSINESS_PRODUCT_CATEGORY_ID.toString()}>
-                {category.TITLE}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+
 
       <div>
         <Label htmlFor="image">Product Image</Label>
@@ -244,6 +237,16 @@ export default function ProductForm({ mode, initialValues, onSubmit, loading, er
               className="text-base py-3 px-4 mt-1"
             />
           </div>
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="tags">Tags</Label>
+        <div className="mt-1">
+          <TagSelect
+            selectedTags={form.tag_ids}
+            onTagsChange={(tagIds) => setForm(f => ({ ...f, tag_ids: tagIds }))}
+          />
         </div>
       </div>
 

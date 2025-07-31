@@ -505,8 +505,9 @@ view business_category_view {
   @@ignore
 }
 
+/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 view business_detail_view_all {
-  BUSINESS_ID             Int    @id @default(0)
+  BUSINESS_ID             Int     @id @default(0)
   BUSINESS_NAME           String? @db.VarChar(255)
   SHORT_NAME              String? @db.VarChar(20)
   DESCRIPTION             String? @db.VarChar(1000)

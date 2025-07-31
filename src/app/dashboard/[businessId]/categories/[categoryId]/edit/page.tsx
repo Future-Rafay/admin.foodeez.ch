@@ -35,6 +35,7 @@ export default function EditCategoryPage() {
     description: string; 
     pic: string;
     status: number;
+    tag_ids: number[];
   }) {
     setSaving(true);
     setError("");
@@ -48,6 +49,7 @@ export default function EditCategoryPage() {
           description: values.description,
           pic: values.pic,
           status: values.status,
+          tag_ids: values.tag_ids,
         }),
       });
       if (!res.ok) {
@@ -79,6 +81,7 @@ export default function EditCategoryPage() {
           description: category.DESCRIPTION,
           pic: category.PIC,
           status: category.STATUS,
+          tag_ids: category.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) || [],
         }}
         onSubmit={handleEdit}
         loading={saving}
