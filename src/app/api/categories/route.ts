@@ -123,20 +123,23 @@ export async function PUT(req: Request) {
       data: updateData,
     });
 
-    // Delete existing tag relationships
-    await tx.business_product_category_2_tag.deleteMany({
-      where: { BUSINESS_PRODUCT_CATEGORY_ID: id },
-    });
-
-    // Create new tag relationships if tags are provided
-    if (tag_ids?.length) {
-      await tx.business_product_category_2_tag.createMany({
-        data: tag_ids.map((tagId: number) => ({
-          BUSINESS_PRODUCT_CATEGORY_ID: id,
-          BUSINESS_PRODUCT_TAG_ID: tagId,
-          CREATION_DATETIME: new Date(),
-        })),
+    // Only update tag relationships if updateImageOnly is false
+    if (!updateImageOnly) {
+      // Delete existing tag relationships
+      await tx.business_product_category_2_tag.deleteMany({
+        where: { BUSINESS_PRODUCT_CATEGORY_ID: id },
       });
+
+      // Create new tag relationships if tags are provided
+      if (tag_ids?.length) {
+        await tx.business_product_category_2_tag.createMany({
+          data: tag_ids.map((tagId: number) => ({
+            BUSINESS_PRODUCT_CATEGORY_ID: id,
+            BUSINESS_PRODUCT_TAG_ID: tagId,
+            CREATION_DATETIME: new Date(),
+          })),
+        });
+      }
     }
 
     // Get the updated tags
