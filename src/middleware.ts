@@ -19,5 +19,8 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/api/products/:path*",
+    "/api/categories/:path*",
+    "/api/tags/:path*",
+    "/api/upload",
   ],
 }; 

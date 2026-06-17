@@ -14,7 +14,11 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "shining-fun-cae9b3168c.media.strapiapp.com",
+        hostname: "*.s3.amazonaws.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.s3.*.amazonaws.com",
       },
       {
         protocol: "http",
