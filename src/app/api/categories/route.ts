@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { S3Storage } from '@/lib/s3-storage';
+
+const storage = new S3Storage();
 
 // GET: List categories for a business
 export async function GET(req: Request) {
@@ -8,12 +13,44 @@ export async function GET(req: Request) {
   if (!businessId) {
     return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
   }
+  // Authorization: ensure requester is authenticated and owns this business
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const user = await prisma.visitors_account.findUnique({
+    where: { EMAIL_ADDRESS: session.user.email! },
+  });
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const owner = await prisma.business_owner.findFirst({
+    where: { VISITORS_ACCOUNT_ID: Number(user.VISITORS_ACCOUNT_ID) },
+  });
+  if (!owner) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const access = await prisma.business_owner_2_business.findFirst({
+    where: { BUSINESS_OWNER_ID: owner.BUSINESS_OWNER_ID, BUSINESS_ID: businessId },
+  });
+  if (!access) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
-  // First get all categories
-  const categories = await prisma.business_product_category.findMany({
+  // First get categories (supports optional pagination via ?page=&limit=)
+  const pageParam = searchParams.get('page');
+  const limitParam = searchParams.get('limit');
+  const page = pageParam ? Number(pageParam) : 1;
+  const limit = limitParam ? Number(limitParam) : 0;
+  const findArgs: any = {
     where: { BUSINESS_ID: businessId },
     orderBy: { BUSINESS_PRODUCT_CATEGORY_ID: 'desc' },
-  });
+  };
+  if (limit > 0) {
+    findArgs.skip = (page - 1) * limit;
+    findArgs.take = limit;
+  }
+  const categories = await prisma.business_product_category.findMany(findArgs);
 
   // Then get all category-tag relationships
   const categoryIds = categories.map(c => c.BUSINESS_PRODUCT_CATEGORY_ID);
@@ -48,6 +85,30 @@ export async function POST(req: Request) {
   }
 
   // Create category and its tag relationships in a transaction
+  // Authorization: ensure requester owns this business
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const user = await prisma.visitors_account.findUnique({
+    where: { EMAIL_ADDRESS: session.user.email! },
+  });
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const owner = await prisma.business_owner.findFirst({
+    where: { VISITORS_ACCOUNT_ID: Number(user.VISITORS_ACCOUNT_ID) },
+  });
+  if (!owner) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const access = await prisma.business_owner_2_business.findFirst({
+    where: { BUSINESS_OWNER_ID: owner.BUSINESS_OWNER_ID, BUSINESS_ID: businessId },
+  });
+  if (!access) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  
   const category = await prisma.$transaction(async (tx) => {
     // Create the category
     const newCategory = await tx.business_product_category.create({
@@ -103,6 +164,37 @@ export async function PUT(req: Request) {
   }
 
   // Update category and its tag relationships in a transaction
+  // Authorization: ensure requester owns this category's business
+  const existingCategory = await prisma.business_product_category.findUnique({
+    where: { BUSINESS_PRODUCT_CATEGORY_ID: id },
+  });
+  if (!existingCategory) {
+    return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+  }
+  const businessId = existingCategory.BUSINESS_ID;
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const user = await prisma.visitors_account.findUnique({
+    where: { EMAIL_ADDRESS: session.user.email! },
+  });
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const owner = await prisma.business_owner.findFirst({
+    where: { VISITORS_ACCOUNT_ID: Number(user.VISITORS_ACCOUNT_ID) },
+  });
+  if (!owner) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const access = await prisma.business_owner_2_business.findFirst({
+    where: { BUSINESS_OWNER_ID: owner.BUSINESS_OWNER_ID, BUSINESS_ID: businessId },
+  });
+  if (!access) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  
   const category = await prisma.$transaction(async (tx) => {
     // Prepare update data
     const updateData: any = {};
@@ -115,6 +207,14 @@ export async function PUT(req: Request) {
       updateData.DESCRIPTION = description;
       updateData.PIC = pic;
       updateData.STATUS = status;
+    }
+
+    if (
+      existingCategory.PIC &&
+      pic &&
+      existingCategory.PIC !== pic
+    ) {
+      await storage.delete(existingCategory.PIC).catch(console.error);
     }
     
     // Update the category
@@ -173,6 +273,41 @@ export async function DELETE(req: Request) {
   }
 
   // Delete category and its relationships in a transaction
+  // Authorization: ensure requester owns this category's business
+  const existingCategory = await prisma.business_product_category.findUnique({
+    where: { BUSINESS_PRODUCT_CATEGORY_ID: id },
+  });
+  if (!existingCategory) {
+    return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+  }
+  const businessId = existingCategory.BUSINESS_ID;
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const user = await prisma.visitors_account.findUnique({
+    where: { EMAIL_ADDRESS: session.user.email! },
+  });
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const owner = await prisma.business_owner.findFirst({
+    where: { VISITORS_ACCOUNT_ID: Number(user.VISITORS_ACCOUNT_ID) },
+  });
+  if (!owner) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const access = await prisma.business_owner_2_business.findFirst({
+    where: { BUSINESS_OWNER_ID: owner.BUSINESS_OWNER_ID, BUSINESS_ID: businessId },
+  });
+  if (!access) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  if (existingCategory.PIC) {
+    await storage.delete(existingCategory.PIC).catch(console.error);
+  }
+  
   await prisma.$transaction([
     // Delete tag relationships first
     prisma.business_product_category_2_tag.deleteMany({

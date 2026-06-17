@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { business_product_category, business_product_tag } from "@prisma/client";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
 import TagFilter from "./TagFilter";
+import { resolveMediaUrl } from "@/lib/media";
 
 interface CategoryWithTags extends business_product_category {
   tags?: business_product_tag[];
@@ -33,7 +34,6 @@ export default function CategoryTable() {
     fetch(`/api/categories?businessId=${businessId}`)
       .then(res => res.json())
       .then(data => {
-        console.log('Loaded categories with tags:', data);
         setCategories(data);
         setFilteredCategories(data);
         setLoading(false);
@@ -46,16 +46,13 @@ export default function CategoryTable() {
 
   // Filter categories when tags are selected
   useEffect(() => {
-    console.log('Filtering categories:', { selectedTags, categoriesCount: categories.length });
     if (selectedTags.length === 0) {
       setFilteredCategories(categories);
     } else {
       const filtered = categories.filter(category => {
         const categoryTags = category.tags?.map(tag => tag.BUSINESS_PRODUCT_TAG_ID) || [];
-        console.log(`Category ${category.TITLE}:`, { categoryTags, selectedTags });
         return selectedTags.every(tagId => categoryTags.includes(tagId));
       });
-      console.log('Filtered categories:', filtered.length);
       setFilteredCategories(filtered);
     }
   }, [selectedTags, categories]);
@@ -178,11 +175,11 @@ export default function CategoryTable() {
                     <div className="truncate">{category.DESCRIPTION}</div>
                   </TableCell>
                   <TableCell>
-                    {category.PIC ? (
+                    {resolveMediaUrl(category.PIC) ? (
                       <div className="relative">
                         <Avatar className="w-12 h-12 border-2 border-gray-100 shadow-sm">
                           <AvatarImage 
-                            src={category.PIC} 
+                            src={resolveMediaUrl(category.PIC)!} 
                             alt={category.TITLE || 'Category'}
                             className="object-cover"
                           />
@@ -256,10 +253,10 @@ export default function CategoryTable() {
                       </Badge>
                     </div>
                   </div>
-                  {category.PIC ? (
+                  {resolveMediaUrl(category.PIC) ? (
                     <Avatar className="w-16 h-16 ml-3 flex-shrink-0 border-2 border-gray-100 shadow-sm">
                       <AvatarImage 
-                        src={category.PIC} 
+                        src={resolveMediaUrl(category.PIC)!} 
                         alt={category.TITLE || 'Category'}
                         className="object-cover"
                       />

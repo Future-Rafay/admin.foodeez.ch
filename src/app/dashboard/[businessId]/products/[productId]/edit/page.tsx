@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import ProductForm from "@/components/products/ProductForm";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -18,9 +21,11 @@ export default function EditProductPage() {
     if (!businessId || !productId) return;
     setLoading(true);
     fetch(`/api/products?businessId=${businessId}`)
-      .then(res => res.json())
-      .then(data => {
-        const found = data.find((p: any) => String(p.BUSINESS_PRODUCT_ID) === String(productId));
+      .then((res) => res.json())
+      .then((data) => {
+        const found = data.find(
+          (p: any) => String(p.BUSINESS_PRODUCT_ID) === String(productId)
+        );
         setProduct(found);
         setLoading(false);
       })
@@ -30,10 +35,10 @@ export default function EditProductPage() {
       });
   }, [businessId, productId]);
 
-  async function handleEdit(values: { 
-    title: string; 
-    description: string; 
-    product_price: string; 
+  async function handleEdit(values: {
+    title: string;
+    description: string;
+    product_price: string;
     pic: string;
     tag_ids: number[];
   }) {
@@ -65,15 +70,25 @@ export default function EditProductPage() {
   }
 
   if (loading) {
-    return <div className="text-center text-gray-400 py-8">Loading...</div>;
+    return (
+      <div className="text-center text-gray-400 py-12">Loading product...</div>
+    );
   }
   if (!product) {
-    return <div className="text-center text-red-500 py-8">Product not found.</div>;
+    return (
+      <div className="text-center text-red-500 py-12">Product not found.</div>
+    );
   }
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-6">Edit Product</h1>
+    <div className=" p-4 md:p-6">
+      <div className="flex items-center gap-3 mb-6">
+        
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Edit Product</h1>
+         
+        </div>
+      </div>
       <ProductForm
         mode="edit"
         initialValues={{
@@ -81,7 +96,8 @@ export default function EditProductPage() {
           description: product.DESCRIPTION,
           product_price: product.PRODUCT_PRICE,
           pic: product.PIC,
-          tag_ids: product.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) || [],
+          tag_ids:
+            product.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) || [],
         }}
         onSubmit={handleEdit}
         loading={saving}
@@ -89,4 +105,4 @@ export default function EditProductPage() {
       />
     </div>
   );
-} 
+}

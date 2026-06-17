@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Phone, Mail, Globe } from "lucide-react";
 import Image from "next/image";
 import { business_detail_view_all } from "@prisma/client";
+import { resolveMediaUrl } from "@/lib/media";
 
 interface BusinessInfoCardProps {
   business: business_detail_view_all;
@@ -38,10 +39,10 @@ export function BusinessInfoCard({ business }: BusinessInfoCardProps) {
           </div> */}
           
           {/* Cover Image - Optional */}
-          {business.IMAGE_URL && (
+          {resolveMediaUrl(business.IMAGE_URL) && (
             <div className="relative w-32 h-32 mx-auto md:mx-0 rounded-xl overflow-hidden border-2 border-muted shadow-md">
               <Image
-                src={business.IMAGE_URL}
+                src={resolveMediaUrl(business.IMAGE_URL)!}
                 alt={business.BUSINESS_NAME || 'Business Cover'}
                 fill
                 className="object-cover"

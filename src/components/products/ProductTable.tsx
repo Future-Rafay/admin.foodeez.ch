@@ -7,10 +7,11 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import DeleteProductModal from "./DeleteProductModal";
-import { business_product, business_product_category, business_product_tag } from "@prisma/client";
+import { business_product, business_product_tag } from "@prisma/client";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
 import TagFilter from "./TagFilter";
 import { getBusinessProducts } from "@/services/HelperFunctions";
+import { resolveMediaUrl } from "@/lib/media";
 
 export type SerializedProduct = Omit<business_product, 'COST_PRICE' | 'PRODUCT_PRICE' | 'COMPARE_AS_PRICE'> & {
   COST_PRICE?: number | null;
@@ -137,10 +138,10 @@ export default function ProductTable() {
                       <div className="font-medium">{product.TITLE}</div>
                       {product.tags && product.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {product.tags.slice(0, 2).map(tag => (
-                            <Badge key={tag.BUSINESS_PRODUCT_TAG_ID} variant="outline" className="text-xs">
+                          {product.tags.slice(0, 2).map((tag, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
                               {tag.TITLE}
-                            </Badge>
+                            </Badge>  
                           ))}
                           {product.tags.length > 2 && (
                             <Badge variant="outline" className="text-xs">
@@ -156,11 +157,11 @@ export default function ProductTable() {
                   </TableCell>
                   <TableCell>CHF {product.PRODUCT_PRICE.toString()}</TableCell>
                   <TableCell>
-                    {product.PIC ? (
+                    {resolveMediaUrl(product.PIC) ? (
                       <div className="relative">
                         <Avatar className="w-12 h-12 border-2 border-gray-100 shadow-sm">
                           <AvatarImage 
-                            src={product.PIC} 
+                            src={resolveMediaUrl(product.PIC)!} 
                             alt={product.TITLE}
                             className="object-cover"
                           />
@@ -229,10 +230,10 @@ export default function ProductTable() {
                       </span>
                     </div>
                   </div>
-                  {product.PIC ? (
+                  {resolveMediaUrl(product.PIC) ? (
                     <Avatar className="w-16 h-16 ml-3 flex-shrink-0 border-2 border-gray-100 shadow-sm">
                       <AvatarImage 
-                        src={product.PIC} 
+                        src={resolveMediaUrl(product.PIC)!} 
                         alt={product.TITLE}
                         className="object-cover"
                       />

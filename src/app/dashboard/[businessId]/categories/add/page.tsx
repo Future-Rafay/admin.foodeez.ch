@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import CategoryForm from "@/components/products/CategoryForm";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
-import { uploadImagesToStrapi } from "@/services/HelperFunctions";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export default function AddCategoryPage() {
   const router = useRouter();
@@ -11,14 +13,12 @@ export default function AddCategoryPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleAdd(values: { 
-    title: string; 
-    description: string; 
+  async function handleAdd(values: {
+    title: string;
+    description: string;
     pic: string;
     status: number;
     tag_ids: number[];
-    hasPendingImage?: boolean;
-    pendingImageFile?: File;
   }) {
     setLoading(true);
     setError("");
@@ -39,14 +39,7 @@ export default function AddCategoryPage() {
         const data = await res.json();
         throw new Error(data.error || "Failed to add category");
       }
-      
-      const categoryData = await res.json();
-      
-      // If there's a pending image, start background upload
-      if (values.hasPendingImage && categoryData.BUSINESS_PRODUCT_CATEGORY_ID && values.pendingImageFile) {
-        handleBackgroundImageUpload(categoryData.BUSINESS_PRODUCT_CATEGORY_ID, values.pendingImageFile);
-      }
-      
+
       router.push(`/dashboard/${businessId}/products`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add category");
@@ -55,45 +48,15 @@ export default function AddCategoryPage() {
     }
   }
 
-  async function handleBackgroundImageUpload(categoryId: number, imageFile: File) {
-    try {
-      console.log(`Background image upload started for category ${categoryId}`);
-      
-      // Upload image to Strapi
-      const urls = await uploadImagesToStrapi([imageFile]);
-      if (urls.length > 0) {
-        const imageUrl = urls[0];
-        
-        // Update the category with the new image URL
-        const updateRes = await fetch("/api/categories", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: categoryId,
-            title: "", // We only need to update the image
-            description: "",
-            pic: imageUrl,
-            status: 1,
-            tag_ids: [],
-            updateImageOnly: true, // Flag to only update image
-          }),
-        });
-        
-        if (updateRes.ok) {
-          console.log(`Image URL updated for category ${categoryId}: ${imageUrl}`);
-        } else {
-          console.error("Failed to update category with image URL");
-        }
-      }
-    } catch (error) {
-      console.error("Background image upload failed:", error);
-    }
-  }
-
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-6">Add Category</h1>
+    <div className="p-4 md:p-6">
+      <div className="flex items-center gap-3 mb-6">
+       
+          <h1 className="text-2xl font-bold text-gray-900">Add Category</h1>
+          
+        
+      </div>
       <CategoryForm mode="add" onSubmit={handleAdd} loading={loading} error={error} />
     </div>
   );
-} 
+}

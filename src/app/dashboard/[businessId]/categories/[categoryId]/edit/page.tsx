@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import CategoryForm from "@/components/products/CategoryForm";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export default function EditCategoryPage() {
   const router = useRouter();
@@ -18,9 +21,12 @@ export default function EditCategoryPage() {
     if (!businessId || !categoryId) return;
     setLoading(true);
     fetch(`/api/categories?businessId=${businessId}`)
-      .then(res => res.json())
-      .then(data => {
-        const found = data.find((c: any) => String(c.BUSINESS_PRODUCT_CATEGORY_ID) === String(categoryId));
+      .then((res) => res.json())
+      .then((data) => {
+        const found = data.find(
+          (c: any) =>
+            String(c.BUSINESS_PRODUCT_CATEGORY_ID) === String(categoryId)
+        );
         setCategory(found);
         setLoading(false);
       })
@@ -30,9 +36,9 @@ export default function EditCategoryPage() {
       });
   }, [businessId, categoryId]);
 
-  async function handleEdit(values: { 
-    title: string; 
-    description: string; 
+  async function handleEdit(values: {
+    title: string;
+    description: string;
     pic: string;
     status: number;
     tag_ids: number[];
@@ -58,22 +64,33 @@ export default function EditCategoryPage() {
       }
       router.push(`/dashboard/${businessId}/products`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update category");
+      setError(
+        err instanceof Error ? err.message : "Failed to update category"
+      );
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) {
-    return <div className="text-center text-gray-400 py-8">Loading...</div>;
+    return (
+      <div className="text-center text-gray-400 py-12">Loading category...</div>
+    );
   }
   if (!category) {
-    return <div className="text-center text-red-500 py-8">Category not found.</div>;
+    return (
+      <div className="text-center text-red-500 py-12">Category not found.</div>
+    );
   }
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-6">Edit Category</h1>
+    <div className=" p-4 md:p-6">
+      <div className="flex items-center gap-3 mb-6">
+       
+          <h1 className="text-2xl font-bold text-gray-900">Edit Category</h1>
+          
+        
+      </div>
       <CategoryForm
         mode="edit"
         initialValues={{
@@ -81,7 +98,9 @@ export default function EditCategoryPage() {
           description: category.DESCRIPTION,
           pic: category.PIC,
           status: category.STATUS,
-          tag_ids: category.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) || [],
+          tag_ids:
+            category.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) ||
+            [],
         }}
         onSubmit={handleEdit}
         loading={saving}
@@ -89,4 +108,4 @@ export default function EditCategoryPage() {
       />
     </div>
   );
-} 
+}
