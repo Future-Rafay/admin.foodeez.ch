@@ -507,7 +507,7 @@ view business_category_view {
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 view business_detail_view_all {
-  BUSINESS_ID             Int     @id @default(0)
+  BUSINESS_ID             Int     @unique @default(0)
   BUSINESS_NAME           String? @db.VarChar(255)
   SHORT_NAME              String? @db.VarChar(20)
   DESCRIPTION             String? @db.VarChar(1000)
@@ -540,9 +540,9 @@ view business_detail_view_all {
 
 }
 
-/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+
 view business_detail_view_halal {
-  BUSINESS_ID             Int     @default(0)
+  BUSINESS_ID             Int      @unique @default(0)
   BUSINESS_NAME           String? @db.VarChar(255)
   SHORT_NAME              String? @db.VarChar(20)
   DESCRIPTION             String? @db.VarChar(1000)
@@ -572,13 +572,11 @@ view business_detail_view_halal {
   HALAL                   Int     @default(0)
   CAN_RESERVE_TABLE       Int     @default(0)
   HAVING_ACTIVE_MENU_CARD Int     @default(0)
-
-  @@ignore
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 view business_detail_view_vegan {
-  BUSINESS_ID             Int     @default(0)
+  BUSINESS_ID             Int     @unique @default(0)
   BUSINESS_NAME           String? @db.VarChar(255)
   SHORT_NAME              String? @db.VarChar(20)
   DESCRIPTION             String? @db.VarChar(1000)
@@ -609,12 +607,11 @@ view business_detail_view_vegan {
   CAN_RESERVE_TABLE       Int     @default(0)
   HAVING_ACTIVE_MENU_CARD Int     @default(0)
 
-  @@ignore
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 view business_detail_view_vegetarian {
-  BUSINESS_ID             Int     @default(0)
+  BUSINESS_ID             Int     @unique @default(0)
   BUSINESS_NAME           String? @db.VarChar(255)
   SHORT_NAME              String? @db.VarChar(20)
   DESCRIPTION             String? @db.VarChar(1000)
@@ -644,13 +641,11 @@ view business_detail_view_vegetarian {
   HALAL                   Int     @default(0)
   CAN_RESERVE_TABLE       Int     @default(0)
   HAVING_ACTIVE_MENU_CARD Int     @default(0)
-
-  @@ignore
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 view business_having_active_menu_card_view {
-  BUSINESS_ID Int?
+  BUSINESS_ID Int? @unique
 
   @@ignore
 }
@@ -658,7 +653,7 @@ view business_having_active_menu_card_view {
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 /// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 view visitor_business_review_view {
-  VISITOR_BUSINESS_REVIEW_ID Int       @default(0)
+  VISITOR_BUSINESS_REVIEW_ID Int       @unique @default(0)
   CREATION_DATETIME          DateTime? @db.DateTime(0)
   VISITORS_ACCOUNT_ID        Int
   FIRST_NAME                 String?   @db.VarChar(45)
@@ -680,13 +675,11 @@ view visitor_business_review_view {
   VIDEO_1                    String?   @db.VarChar(255)
   LIKE_COUNT                 Int?      @default(1)
   APPROVED                   Int?      @default(0) @db.TinyInt
-
-  @@ignore
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 view visitor_favorite_restaurants_view {
-  VISITOR_FAVORITE_RESTAURANTS_ID Int       @default(0)
+  VISITOR_FAVORITE_RESTAURANTS_ID Int       @unique @default(0)
   CREATION_DATETIME               DateTime? @db.DateTime(0)
   VISITORS_ACCOUNT_ID             Int?
   BUSINESS_ID                     Int?
@@ -700,12 +693,11 @@ view visitor_favorite_restaurants_view {
   WEB_ADDRESS                     String?   @db.VarChar(1000)
   PHONE_NUMBER_SHORT              String?   @db.VarChar(45)
 
-  @@ignore
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 view foodeez_review_view {
-  FOODEEZ_REVIEW_ID BigInt    @default(0)
+  FOODEEZ_REVIEW_ID BigInt    @unique @default(0)
   CREATION_DATETIME DateTime? @db.DateTime(0)
   REVIEWER_NAME     String?   @db.VarChar(255)
   REVIEWER_EMAIL    String?   @db.VarChar(100)
@@ -717,7 +709,6 @@ view foodeez_review_view {
   PIC_3             String?   @db.VarChar(255)
   APPROVED          Int?      @default(0) @db.TinyInt
 
-  @@ignore
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.

@@ -1,6 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableCaption } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,8 +14,7 @@ interface TagFormData {
 }
 
 export default function TagsTable() {
-  const router = useRouter();
-  const businessId = useBusinessId();
+    const businessId = useBusinessId();
 
   const [tags, setTags] = useState<business_product_tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,12 +26,9 @@ export default function TagsTable() {
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+   // ✅ Single definition using useCallback with your fetch logic
+   const loadTags = useCallback(async () => {
     if (!businessId) return;
-    loadTags();
-  }, [businessId]);
-
-  async function loadTags() {
     setLoading(true);
     try {
       const res = await fetch(`/api/tags?businessId=${businessId}`);
@@ -45,7 +40,11 @@ export default function TagsTable() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [businessId]);
+
+  useEffect(() => {
+    loadTags();
+  }, [loadTags]);
 
   function handleAdd() {
     setFormData({ title: "" });
@@ -214,6 +213,7 @@ export default function TagsTable() {
                 value={formData.title}
                 onChange={e => setFormData(f => ({ ...f, title: e.target.value }))}
                 placeholder="Enter tag name"
+                className="mt-4"
                 required
               />
             </div>

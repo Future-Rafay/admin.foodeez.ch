@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
         setError(data?.message || "Something went wrong.");
       }
     } catch (err) {
-      setError("Server error. Try again later.");
+      setError("Server error. Try again later." + err);
     } finally {
       setLoading(false);
     }

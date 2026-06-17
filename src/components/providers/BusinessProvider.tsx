@@ -34,12 +34,10 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       console.error("Invalid business ID provided to setBusinessId");
       return;
     }
-    console.log("Setting business ID:", id);
     setBusinessIdState(id);
   }, []);
 
   const clearBusinessId = useCallback(() => {
-    console.log("Clearing business ID");
     setBusinessIdState(null);
   }, []);
 

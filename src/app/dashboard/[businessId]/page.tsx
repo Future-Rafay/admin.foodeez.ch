@@ -7,15 +7,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Package, Receipt, Building2, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
-import { serializeData } from "@/lib/utils";
+import { Serialized, serializeData } from "@/lib/utils";
 import { BusinessInfoCard } from "@/components/dashboard/BusinessInfoCard";
 import { StatsCard } from "@/components/dashboard/StatsCard";
-import { business_detail_view_all, business_order, business_product } from "@prisma/client";
+import { business_detail_view_all } from "@prisma/client";
+
+// Get the Prisma model types
+type Product = Awaited<ReturnType<typeof getBusinessProducts>>[number];
+type Order = Awaited<ReturnType<typeof getBusinessOrders>>[number];
+type Business = NonNullable<Awaited<ReturnType<typeof getBusinessDetail>>>[number];
+
 
 interface DashboardData {
-  products: business_product[];
-  orders: business_order[];
-  business: business_detail_view_all | null;
+  products: Serialized<Product>[];
+  orders: Serialized<Order>[];
+  business: Serialized<Business> | null;
 }
 
 export default function DashboardPage() {
@@ -44,8 +50,8 @@ export default function DashboardPage() {
 
         // Serialize the data to handle Decimal values
         setData({
-          products: serializeData(products),
-          orders: serializeData(orders),
+          products: serializeData(products) as Serialized<Product>[],
+          orders: serializeData(orders) as Serialized<Order>[],
           business: businessDetails ? serializeData(businessDetails[0]) : null
         });
       } catch (error) {
@@ -75,7 +81,7 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-screen">
       <main className="flex-1 p-4 sm:p-6 space-y-8 w-full">
         {/* Business Info */}
-        <BusinessInfoCard business={data.business} />
+        <BusinessInfoCard business={data.business as unknown as business_detail_view_all} />
 
         {/* Stats Cards */}
         <section className="grid gap-6">

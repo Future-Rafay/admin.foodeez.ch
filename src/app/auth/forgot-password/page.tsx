@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
         setMessage("");
 
         try {
-            const res = await fetch("/api/forgot-password", {
+            const res = await fetch("/api/auth/forgot-password", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email }),
@@ -32,7 +32,7 @@ export default function ForgotPasswordPage() {
                 setMessage(data?.error || "Something went wrong.");
             }
         } catch (error) {
-            setMessage("Server error. Try again later.");
+            setMessage("Server error. Try again later." + error);
         } finally {
             setLoading(false);
         }
