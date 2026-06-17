@@ -2,14 +2,19 @@
 
 import { SerializedProduct } from "@/components/products/ProductTable";
 import prisma from "@/lib/prisma";
-import { business_detail_view_all, business_order, business_owner, business_owner_2_business, business_product } from "@prisma/client";
+import { business_detail_view_all, business_order, business_owner, business_owner_2_business } from "@prisma/client";
 
-export async function getBusinessOwner(businessOwnerId: number) {
+export async function getBusinessOwner(visitorsAccountId: number) {
+    console.log("[getBusinessOwner] Looking up VISITORS_ACCOUNT_ID:", visitorsAccountId);
     const owner = await prisma.business_owner.findFirst({
         where: {
-            VISITORS_ACCOUNT_ID: businessOwnerId,
+            VISITORS_ACCOUNT_ID: visitorsAccountId,
         },
     });
+    console.log("[getBusinessOwner] Result:", owner ? {
+        BUSINESS_OWNER_ID: owner.BUSINESS_OWNER_ID,
+        VISITORS_ACCOUNT_ID: owner.VISITORS_ACCOUNT_ID,
+    } : null);
     return owner as business_owner;
 }
 
@@ -94,46 +99,4 @@ export async function getBusinessOrders(businessId: number) {
         console.error("Error fetching business orders:", error);
         return [];
     }
-}
-
-const STRAPI_URL = process.env.NEXT_PUBLIC_STRAPI_URL || '';
-const STRAPI_API_TOKEN = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN || process.env.STRAPI_API_TOKEN || '';
-
-export async function uploadImagesToStrapi(images: File[]): Promise<string[]> {
-    const uploadedUrls: string[] = [];
-    for (const image of images) {
-        const formData = new FormData();
-        formData.append('files', image);
-        const res = await fetch(`${STRAPI_URL}/api/upload`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${STRAPI_API_TOKEN}`,
-            },
-            body: formData,
-        });
-        if (!res.ok) throw new Error('Failed to upload to Strapi');
-        const data = await res.json();
-        if (data && data[0] && data[0].url) {
-            uploadedUrls.push(data[0].url.startsWith('http') ? data[0].url : `${STRAPI_URL}${data[0].url}`);
-        }
-    }
-    return uploadedUrls;
-}
-
-export async function uploadVideoToStrapi(video: File): Promise<string | null> {
-    const formData = new FormData();
-    formData.append('files', video);
-    const res = await fetch(`${STRAPI_URL}/api/upload`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${STRAPI_API_TOKEN}`,
-        },
-        body: formData,
-    });
-    if (!res.ok) throw new Error('Failed to upload video to Strapi');
-    const data = await res.json();
-    if (data && data[0] && data[0].url) {
-        return data[0].url.startsWith('http') ? data[0].url : `${STRAPI_URL}${data[0].url}`;
-    }
-    return null;
 }

@@ -13,7 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, MapPin, Pin } from "lucide-react";
+import { ArrowRight, MapPin } from "lucide-react";
+import { resolveMediaUrl } from "@/lib/media";
 
 // Types
 type BusinessWithDetails = business_owner_2_business & {
@@ -85,7 +86,7 @@ function NoBusinessesMessage() {
     <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center p-4">
       <h1 className="text-3xl font-bold text-primary">No Businesses Found</h1>
       <p className="text-muted-foreground max-w-md">
-        You don't have any businesses associated with your business owner account yet.
+        You don&apos;t have any businesses associated with your business owner account yet.
         Please add a business or contact support for assistance.
       </p>
     </div>
@@ -113,10 +114,10 @@ function BusinessCard({ business }: { business: BusinessWithDetails }) {
         <div className="relative">
           {/* Business Image */}
           <div className="w-full h-40 bg-muted relative overflow-hidden">
-            {business.details?.IMAGE_URL ? (
+            {resolveMediaUrl(business.details?.IMAGE_URL) ? (
               <Image
-                src={business.details.IMAGE_URL}
-                alt={business.details.BUSINESS_NAME || "Business logo"}
+                src={resolveMediaUrl(business.details?.IMAGE_URL)!}
+                alt={business.details?.BUSINESS_NAME || "Business logo"}
                 width={450}
                 height={160}
                 className="object-cover w-full h-full"
@@ -224,31 +225,68 @@ function DashboardContent() {
 
   useEffect(() => {
     async function loadDashboardData() {
-      if (!session?.user?.id) return;
+      console.log("[Dashboard] loadDashboardData started", {
+        status,
+        sessionUserId: session?.user?.id,
+        sessionUserEmail: session?.user?.email,
+        sessionUserName: session?.user?.name,
+      });
+
+      if (!session?.user?.id) {
+        console.warn("[Dashboard] No session.user.id — cannot resolve business owner");
+        setIsLoading(false);
+        return;
+      }
+
+      const visitorsAccountId = Number(session.user.id);
+      console.log("[Dashboard] Resolved visitorsAccountId:", visitorsAccountId);
+
+      if (!Number.isFinite(visitorsAccountId)) {
+        console.error("[Dashboard] Invalid visitorsAccountId from session:", session.user.id);
+        setError("Invalid session. Please sign out and sign in again.");
+        setIsLoading(false);
+        return;
+      }
 
       try {
         setIsLoading(true);
         setError(null);
 
-        // First check if user is a business owner
-        const ownerData = await getBusinessOwner(Number(session.user.id));
+        // Lookup business_owner by VISITORS_ACCOUNT_ID (not email!)
+        const ownerData = await getBusinessOwner(visitorsAccountId);
+        console.log("[Dashboard] getBusinessOwner result:", ownerData);
+
         setOwner(ownerData);
 
         if (!ownerData) {
+          console.warn(
+            "[Dashboard] No business_owner row for VISITORS_ACCOUNT_ID:",
+            visitorsAccountId
+          );
           setIsLoading(false);
           return;
         }
 
         // Then get their businesses with details
         const businessesData = await getBusinessIds(ownerData.BUSINESS_OWNER_ID);
+        console.log("[Dashboard] getBusinessIds result:", {
+          businessOwnerId: ownerData.BUSINESS_OWNER_ID,
+          count: businessesData.length,
+          businesses: businessesData,
+        });
 
         // Get details for each business
         const businessesWithDetails = await Promise.all(
           businessesData.map(async (business) => {
             const details = await getBusinessDetail(Number(business.BUSINESS_ID));
+            console.log("[Dashboard] getBusinessDetail:", {
+              businessId: business.BUSINESS_ID,
+              detailsCount: details.length,
+              name: details[0]?.BUSINESS_NAME,
+            });
             return {
               ...business,
-              details: details[0] || null
+              details: details[0] || null,
             };
           })
         );
@@ -264,6 +302,9 @@ function DashboardContent() {
 
     if (status === 'authenticated') {
       loadDashboardData();
+    } else if (status === "unauthenticated") {
+      console.log("[Dashboard] User not authenticated");
+      setIsLoading(false);
     }
   }, [session, status]);
 
