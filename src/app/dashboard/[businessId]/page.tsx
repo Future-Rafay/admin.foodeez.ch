@@ -1,197 +1,214 @@
-"use client";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import {
+  AlertCircle,
+  ArrowRight,
+  Clock,
+  Package,
+  ReceiptText,
+  Wallet,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { getBusinessDashboardData } from "@/services/admin-data";
+import { cn } from "@/lib/utils";
 
-import { useBusinessId } from "@/components/providers/BusinessProvider";
-import { getBusinessDetail, getBusinessOrders, getBusinessProducts } from "@/services/HelperFunctions";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Package, Receipt, Building2, Clock } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Serialized, serializeData } from "@/lib/utils";
-import { BusinessInfoCard } from "@/components/dashboard/BusinessInfoCard";
-import { StatsCard } from "@/components/dashboard/StatsCard";
-import { business_detail_view_all } from "@prisma/client";
+type DashboardPageProps = {
+  params: Promise<{ businessId: string }>;
+};
 
-// Get the Prisma model types
-type Product = Awaited<ReturnType<typeof getBusinessProducts>>[number];
-type Order = Awaited<ReturnType<typeof getBusinessOrders>>[number];
-type Business = NonNullable<Awaited<ReturnType<typeof getBusinessDetail>>>[number];
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "CHF",
+});
 
+const numberFormatter = new Intl.NumberFormat("en-US");
 
-interface DashboardData {
-  products: Serialized<Product>[];
-  orders: Serialized<Order>[];
-  business: Serialized<Business> | null;
+function formatDateTime(value: string | null) {
+  if (!value) return "Not available";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
-export default function DashboardPage() {
-  const businessId = useBusinessId();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<DashboardData>({
-    products: [],
-    orders: [],
-    business: null
-  });
+function statusClasses(status: string) {
+  if (status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "cancelled") return "border-red-200 bg-red-50 text-red-700";
+  if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (status === "new") return "border-blue-200 bg-blue-50 text-blue-700";
+  return "border-gray-200 bg-gray-50 text-gray-600";
+}
 
-  useEffect(() => {
-    async function loadDashboardData() {
-      if (!businessId) return;
+export default async function DashboardPage({ params }: DashboardPageProps) {
+  const { businessId: businessIdParam } = await params;
+  const businessId = Number(businessIdParam);
 
-      try {
-        setIsLoading(true);
-        setError(null);
+  if (!Number.isFinite(businessId)) {
+    notFound();
+  }
 
-        const [products, orders, businessDetails] = await Promise.all([
-          getBusinessProducts(Number(businessId)),
-          getBusinessOrders(Number(businessId)),
-          getBusinessDetail(Number(businessId))
-        ]);
+  let data;
 
-        // Serialize the data to handle Decimal values
-        setData({
-          products: serializeData(products) as Serialized<Product>[],
-          orders: serializeData(orders) as Serialized<Order>[],
-          business: businessDetails ? serializeData(businessDetails[0]) : null
-        });
-      } catch (error) {
-        console.error("Error loading dashboard data:", error);
-        setError("Failed to load dashboard data");
-      } finally {
-        setIsLoading(false);
-      }
+  try {
+    data = await getBusinessDashboardData(businessId);
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      redirect("/auth/signin");
     }
 
-    loadDashboardData();
-  }, [businessId]);
+    if (error instanceof Error && error.message === "Forbidden") {
+      notFound();
+    }
 
-  if (isLoading) {
-    return <DashboardSkeleton />;
+    throw error;
   }
 
-  if (error) {
-    return <DashboardError error={error} />;
-  }
-
-  if (!data.business) {
-    return <DashboardError error="Business not found" />;
-  }
+  const kpiCards = [
+    {
+      label: "Total Orders",
+      value: numberFormatter.format(data.kpis.totalOrders),
+      icon: ReceiptText,
+      help: "All time order volume",
+    },
+    {
+      label: "Total Revenue",
+      value: currencyFormatter.format(data.kpis.totalRevenue),
+      icon: Wallet,
+      help: "Sum of final order totals",
+    },
+    {
+      label: "Pending Orders",
+      value: numberFormatter.format(data.kpis.pendingOrders),
+      icon: AlertCircle,
+      help: "New or pending orders",
+    },
+    {
+      label: "Active Products",
+      value: numberFormatter.format(data.kpis.activeProducts),
+      icon: Package,
+      help: "Products visible in catalog",
+    },
+  ];
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex-1 p-4 sm:p-6 space-y-8 w-full">
-        {/* Business Info */}
-        <BusinessInfoCard business={data.business as unknown as business_detail_view_all} />
+    <div className="space-y-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {kpiCards.map((card) => {
+          const Icon = card.icon;
 
-        {/* Stats Cards */}
-        <section className="grid gap-6">
-          <h2 className="text-2xl font-bold text-foodeez-primary">Dashboard Overview</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <StatsCard
-              title="Products"
-              value={data.products.length}
-              description="Active menu items"
-              icon={Package}
-              href={`/dashboard/${businessId}/products`}
-            />
-            <ComingSoonCard title="Orders" icon={Receipt} />
-            <ComingSoonCard title="Settings" icon={Building2} />
-          </div>
-        </section>
-      </main>
-    </div>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="flex-1 p-4 sm:p-6 space-y-8 max-w-7xl mx-auto w-full">
-      <Card>
-        <div className="p-6 space-y-6">
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className="flex-shrink-0 space-y-4">
-              <Skeleton className="h-32 w-32 rounded-xl" />
-              <Skeleton className="h-32 w-32 rounded-xl" />
-            </div>
-            <div className="flex-grow space-y-6">
-              <div className="space-y-2">
-                <Skeleton className="h-8 w-64" />
-                <Skeleton className="h-4 w-32" />
-              </div>
-              <div className="flex gap-2">
-                <Skeleton className="h-6 w-16" />
-                <Skeleton className="h-6 w-16" />
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-6 w-full" />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <Skeleton className="h-12 w-12 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-6 w-32" />
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-8 w-16" />
+          return (
+            <Card key={card.label} className="border-gray-200 bg-white shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      {card.label}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-950">
+                      {card.value}
+                    </p>
+                  </div>
+                  <div className="flex size-10 items-center justify-center rounded-lg bg-foodeez-primary/10 text-foodeez-primary">
+                    <Icon className="size-5" />
                   </div>
                 </div>
+                <p className="mt-4 text-xs text-gray-500">{card.help}</p>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+          );
+        })}
+      </section>
 
-function DashboardError({ error }: { error: string }) {
-  return (
-    <div className="flex-1 flex items-center justify-center p-4">
-      <Card className="max-w-md w-full">
-        <CardHeader>
-          <CardTitle className="text-destructive">Error</CardTitle>
-          <CardDescription>{error}</CardDescription>
+      <Card className="border-gray-200 bg-white shadow-sm">
+        <CardHeader className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-lg font-semibold text-gray-950">
+              Recent Orders
+            </CardTitle>
+            <p className="mt-1 text-sm text-gray-500">
+              Last 10 orders placed for this restaurant.
+            </p>
+          </div>
+          <Link
+            href={`/dashboard/${businessId}/orders`}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-foodeez-primary hover:text-foodeez-secondary"
+          >
+            View all orders
+            <ArrowRight className="size-4" />
+          </Link>
         </CardHeader>
-        <CardContent>
-          <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
-            Try Again
-          </Button>
+        <CardContent className="p-0">
+          {data.recentOrders.length ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 hover:bg-gray-50">
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.recentOrders.map((order) => (
+                    <TableRow key={order.id} className="hover:bg-gray-50">
+                      <TableCell className="font-medium text-gray-950">
+                        #{order.id}
+                      </TableCell>
+                      <TableCell>{order.customer}</TableCell>
+                      <TableCell>{order.items}</TableCell>
+                      <TableCell>
+                        {currencyFormatter.format(order.total)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={cn("capitalize", statusClasses(order.status))}
+                        >
+                          {order.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-gray-500">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock className="size-4" />
+                          {formatDateTime(order.createdAt)}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+              <div className="mb-4 flex size-12 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+                <ReceiptText className="size-6" />
+              </div>
+              <h2 className="text-lg font-semibold text-gray-950">
+                No orders yet
+              </h2>
+              <p className="mt-1 max-w-md text-sm text-gray-500">
+                Recent customer orders will appear here once they start coming
+                in.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function ComingSoonCard({ title, icon: Icon }: { title: string; icon: any }) {
-  return (
-    <Card className="border-dashed border-muted-foreground/20">
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-4">
-          <div className="rounded-full bg-muted p-3">
-            <Icon className="w-6 h-6 text-muted-foreground" />
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-muted-foreground">
-              {title}
-            </div>
-            <div className="text-sm text-muted-foreground/60">Coming Soon</div>
-            <div className="mt-2 flex items-center text-sm text-muted-foreground/60">
-              <Clock className="w-4 h-4 mr-1" /> In Development
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

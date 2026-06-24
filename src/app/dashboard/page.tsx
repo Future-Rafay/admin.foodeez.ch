@@ -1,342 +1,178 @@
-"use client"
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getBusinessIds, getBusinessOwner, getBusinessDetail} from "@/services/HelperFunctions";
-import { business_owner, business_owner_2_business, business_detail_view_all } from "@prisma/client";
-import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
-import DashboardNavbar from "@/components/core/DashboardNavbar";
-import DashboardFooter from "@/components/core/DashboardFooter";
-import DashboardBreadcrumb from "@/components/core/DashboardBreadcrumb";
-import { useSetBusinessId } from "@/components/providers/BusinessProvider";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, MapPin } from "lucide-react";
+import { redirect } from "next/navigation";
+import { ArrowRight, Building2, MapPin, Store } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { getOwnedBusinesses } from "@/services/admin-data";
 import { resolveMediaUrl } from "@/lib/media";
 
-// Types
-type BusinessWithDetails = business_owner_2_business & {
-  details?: business_detail_view_all | null;
-};
+export default async function DashboardRootPage() {
+  let businesses;
 
-// Loading State Component
-function LoadingState() {
-  return (
-    <div className="flex-1 flex flex-col items-center px-4 py-8 w-full">
-      <section className="w-full max-w-3xl mx-auto text-center mb-10">
-        <Skeleton className="h-10 w-3/4 mx-auto mb-4" />
-        <Skeleton className="h-6 w-1/2 mx-auto" />
-      </section>
-      <div className="w-full max-w-7xl mx-auto grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3].map((i) => (
-          <Card key={i} className="cursor-pointer">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2 flex-1">
-                  <Skeleton className="h-6 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-                <Skeleton className="h-12 w-12 rounded-full" />
+  try {
+    businesses = await getOwnedBusinesses();
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      redirect("/auth/signin");
+    }
+
+    return (
+      <main className="min-h-screen bg-gray-100 px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-[70vh] max-w-xl items-center justify-center">
+          <Card className="w-full border-gray-200 bg-white text-center shadow-sm">
+            <CardContent className="p-8">
+              <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-lg bg-foodeez-primary/10 text-foodeez-primary">
+                <Building2 className="size-6" />
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <Skeleton className="h-5 w-16" />
-                  <Skeleton className="h-5 w-16" />
-                </div>
-                <Skeleton className="h-4 w-32" />
-              </div>
+              <h1 className="text-2xl font-semibold text-gray-950">
+                Business owner access needed
+              </h1>
+              <p className="mt-2 text-sm text-gray-600">
+                Your account is signed in, but it is not connected to a
+                Foodeez business owner profile yet.
+              </p>
             </CardContent>
           </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Error Message Component
-function ErrorMessage({ message }: { message: string }) {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center p-4">
-      <h1 className="text-3xl font-bold text-destructive">Error</h1>
-      <p className="text-muted-foreground max-w-md">{message}</p>
-    </div>
-  );
-}
-
-// Not Registered Message Component
-function NotRegisteredMessage() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center p-4">
-      <h1 className="text-3xl font-bold text-primary">Not Registered as Business Owner</h1>
-      <p className="text-muted-foreground max-w-md">
-        You need to register as a business owner on Foodeez to access the admin dashboard.
-        Please contact support or register your business to continue.
-      </p>
-    </div>
-  );
-}
-
-// No Businesses Message Component
-function NoBusinessesMessage() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center p-4">
-      <h1 className="text-3xl font-bold text-primary">No Businesses Found</h1>
-      <p className="text-muted-foreground max-w-md">
-        You don&apos;t have any businesses associated with your business owner account yet.
-        Please add a business or contact support for assistance.
-      </p>
-    </div>
-  );
-}
-
-// Business Card Component
-function BusinessCard({ business }: { business: BusinessWithDetails }) {
-  const setBusinessId = useSetBusinessId();
-
-  const handleBusinessSelect = () => {
-    const businessId = business.BUSINESS_ID?.toString();
-    if (!businessId) {
-      console.error("Invalid business ID:", business);
-      return;
-    }
-    setBusinessId(businessId);
-  };
-
-  const businessUrl = `/dashboard/${business.BUSINESS_ID}`;
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <Link href={businessUrl} onClick={handleBusinessSelect}>
-      <Card className="group overflow-hidden border-2 hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-        <div className="relative">
-          {/* Business Image */}
-          <div className="w-full h-40 bg-muted relative overflow-hidden">
-            {resolveMediaUrl(business.details?.IMAGE_URL) ? (
-              <Image
-                src={resolveMediaUrl(business.details?.IMAGE_URL)!}
-                alt={business.details?.BUSINESS_NAME || "Business logo"}
-                width={450}
-                height={160}
-                className="object-cover w-full h-full"
-                priority
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-primary/5">
-                <Image src="/images/Logo/LogoFoodeezMain.svg" alt="Business logo" width={48} height={48} />
-              </div>
-            )}
+    <main className="min-h-screen bg-gray-100">
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <Image
+              src="/images/Logo/LogoFoodeezMain.svg"
+              alt="Foodeez"
+              width={126}
+              height={40}
+              priority
+            />
+          </Link>
+          <Badge
+            variant="outline"
+            className="border-foodeez-primary/20 bg-foodeez-primary/5 text-foodeez-primary"
+          >
+            Admin
+          </Badge>
+        </div>
+      </header>
 
-            {/* Food Type Badges */}
-            <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap max-w-[80%]">
-              {business.details?.VEGAN === 1 && (
-                <Badge variant="outline" className="bg-green-500/90 text-white border-none text-xs">
-                  Vegan
-                </Badge>
-              )}
-              {business.details?.VEGETARIAN === 1 && (
-                <Badge variant="outline" className="bg-green-500/90 text-white border-none text-xs">
-                  Vegetarian
-                </Badge>
-              )}
-              {business.details?.HALAL === 1 && (
-                <Badge variant="outline" className="bg-blue-500/90 text-white border-none text-xs">
-                  Halal
-                </Badge>
-              )}
-            </div>
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-foodeez-primary">
+              Business selector
+            </p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-gray-950">
+              Choose a restaurant to manage
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm text-gray-600">
+              View and manage menus, products, orders, and settings for each
+              business connected to your account.
+            </p>
           </div>
-
-          {/* Active Menu Badge */}
-          {business.details?.HAVING_ACTIVE_MENU_CARD === 1 && (
-            <div className="absolute -top-2 -right-2 transform rotate-12">
-              <Badge className="bg-foodeez-primary text-white border-none shadow-sm">
-                Active Menu
-              </Badge>
-            </div>
-          )}
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 shadow-sm">
+            <span className="font-semibold text-gray-950">
+              {businesses.length}
+            </span>{" "}
+            owned business{businesses.length === 1 ? "" : "es"}
+          </div>
         </div>
 
-        <CardHeader className="pb-2 pt-4">
-          <CardTitle className="text-xl font-bold text-foodeez-primary line-clamp-2">
-            {business.details?.BUSINESS_NAME || `Business #${business.BUSINESS_ID}`}
-          </CardTitle>
-          {business.details?.SHORT_NAME && (
-            <p className="text-sm text-muted-foreground font-medium">
-              {business.details.SHORT_NAME}
-            </p>
-          )}
-        </CardHeader>
+        {businesses.length ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {businesses.map((business) => {
+              const mediaUrl =
+                resolveMediaUrl(business.logo) ||
+                resolveMediaUrl(business.imageUrl);
 
-        <CardContent>
-          <div className="space-y-3">
-            <div className="space-y-2 text-sm">
-              {business.details?.ADDRESS_TOWN && (
-                <p className="text-muted-foreground flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  {business.details.ADDRESS_TOWN}
-                </p>
-              )}
-            </div>
+              return (
+                <Card
+                  key={business.id}
+                  className="overflow-hidden border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <CardContent className="p-5">
+                    <div className="flex items-start gap-4">
+                      <div className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                        {mediaUrl ? (
+                          <Image
+                            src={mediaUrl}
+                            alt={business.name}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <Store className="size-6 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h2 className="truncate text-base font-semibold text-gray-950">
+                              {business.name}
+                            </h2>
+                            {business.shortName && (
+                              <p className="mt-0.5 truncate text-sm text-gray-500">
+                                {business.shortName}
+                              </p>
+                            )}
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={
+                              business.status === "active"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-gray-200 bg-gray-50 text-gray-600"
+                            }
+                          >
+                            {business.status}
+                          </Badge>
+                        </div>
 
-            <div className="pt-2 border-t border-primary/10">
-              <p className="text-sm font-medium text-primary/80 group-hover:text-primary transition-colors flex items-center justify-between">
-                Manage Business
-                <ArrowRight className="w-4 h-4" />
-              </p>
-            </div>
+                        {business.town && (
+                          <p className="mt-3 flex items-center gap-1.5 text-sm text-gray-500">
+                            <MapPin className="size-4" />
+                            {business.town}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <Button
+                      asChild
+                      className="mt-5 w-full bg-foodeez-primary text-white hover:bg-foodeez-secondary"
+                    >
+                      <Link href={`/dashboard/${business.id}`}>
+                        Go to Dashboard
+                        <ArrowRight className="size-4" />
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
-// Business List Component
-function BusinessList({ businesses }: { businesses: BusinessWithDetails[] }) {
-  return (
-    <div className="flex-1 flex flex-col items-center px-4 py-8 w-full">
-      <section className="w-full max-w-3xl mx-auto text-center mb-10">
-        <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-foodeez-primary to-foodeez-primary/70 text-transparent bg-clip-text">
-          Welcome to Dashboard
-        </h1>
-        <p className="text-muted-foreground text-lg">
-          Select a business to manage your menu, orders, and more.
-        </p>
+        ) : (
+          <Card className="border-dashed border-gray-300 bg-white text-center">
+            <CardContent className="p-10">
+              <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+                <Store className="size-6" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-950">
+                No businesses found
+              </h2>
+              <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">
+                This owner account does not have any businesses attached yet.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </section>
-      <div className="w-full grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {businesses.map((business) => (
-          <BusinessCard key={business.BUSINESS_OWNER_2_BUSINESS_ID} business={business} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Main Dashboard Content Component
-function DashboardContent() {
-  const { data: session, status } = useSession();
-  const [businesses, setBusinesses] = useState<BusinessWithDetails[]>([]);
-  const [owner, setOwner] = useState<business_owner | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadDashboardData() {
-      console.log("[Dashboard] loadDashboardData started", {
-        status,
-        sessionUserId: session?.user?.id,
-        sessionUserEmail: session?.user?.email,
-        sessionUserName: session?.user?.name,
-      });
-
-      if (!session?.user?.id) {
-        console.warn("[Dashboard] No session.user.id — cannot resolve business owner");
-        setIsLoading(false);
-        return;
-      }
-
-      const visitorsAccountId = Number(session.user.id);
-      console.log("[Dashboard] Resolved visitorsAccountId:", visitorsAccountId);
-
-      if (!Number.isFinite(visitorsAccountId)) {
-        console.error("[Dashboard] Invalid visitorsAccountId from session:", session.user.id);
-        setError("Invalid session. Please sign out and sign in again.");
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // Lookup business_owner by VISITORS_ACCOUNT_ID (not email!)
-        const ownerData = await getBusinessOwner(visitorsAccountId);
-        console.log("[Dashboard] getBusinessOwner result:", ownerData);
-
-        setOwner(ownerData);
-
-        if (!ownerData) {
-          console.warn(
-            "[Dashboard] No business_owner row for VISITORS_ACCOUNT_ID:",
-            visitorsAccountId
-          );
-          setIsLoading(false);
-          return;
-        }
-
-        // Then get their businesses with details
-        const businessesData = await getBusinessIds(ownerData.BUSINESS_OWNER_ID);
-        console.log("[Dashboard] getBusinessIds result:", {
-          businessOwnerId: ownerData.BUSINESS_OWNER_ID,
-          count: businessesData.length,
-          businesses: businessesData,
-        });
-
-        // Get details for each business
-        const businessesWithDetails = await Promise.all(
-          businessesData.map(async (business) => {
-            const details = await getBusinessDetail(Number(business.BUSINESS_ID));
-            console.log("[Dashboard] getBusinessDetail:", {
-              businessId: business.BUSINESS_ID,
-              detailsCount: details.length,
-              name: details[0]?.BUSINESS_NAME,
-            });
-            return {
-              ...business,
-              details: details[0] || null,
-            };
-          })
-        );
-
-        setBusinesses(businessesWithDetails);
-      } catch (error) {
-        console.error('Failed to load dashboard data:', error);
-        setError('Failed to load dashboard data. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    if (status === 'authenticated') {
-      loadDashboardData();
-    } else if (status === "unauthenticated") {
-      console.log("[Dashboard] User not authenticated");
-      setIsLoading(false);
-    }
-  }, [session, status]);
-
-  if (status === 'loading' || isLoading) {
-    return <LoadingState />;
-  }
-
-  if (error) {
-    return <ErrorMessage message={error} />;
-  }
-
-  if (!owner) {
-    return <NotRegisteredMessage />;
-  }
-
-  if (!businesses?.length) {
-    return <NoBusinessesMessage />;
-  }
-
-  return <BusinessList businesses={businesses} />;
-}
-
-// Main Dashboard Page Component
-export default function DashboardRootPage() {
-  return (
-    <div className="min-h-screen flex flex-col max-w-[1440px] mx-auto">
-      <DashboardNavbar />
-      <div className="px-4 sm:px-6 lg:px-8 py-4">
-        <DashboardBreadcrumb />
-      </div>
-      <DashboardContent />
-      <DashboardFooter />
-    </div>
+    </main>
   );
 }

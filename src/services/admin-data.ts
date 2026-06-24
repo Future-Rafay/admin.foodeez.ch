@@ -1,0 +1,382 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { S3Storage } from "@/lib/s3-storage";
+
+const storage = new S3Storage();
+
+export type AdminBusinessCard = {
+  id: number;
+  name: string;
+  shortName: string | null;
+  logo: string | null;
+  imageUrl: string | null;
+  town: string | null;
+  status: "active" | "inactive";
+};
+
+export type DashboardKpis = {
+  totalOrders: number;
+  totalRevenue: number;
+  pendingOrders: number;
+  activeProducts: number;
+};
+
+export type RecentOrderRow = {
+  id: number;
+  customer: string;
+  items: number;
+  total: number;
+  status: "new" | "pending" | "completed" | "cancelled" | "unknown";
+  createdAt: string | null;
+};
+
+export type ProductCategoryOption = {
+  id: number;
+  title: string;
+};
+
+export type AdminProductRow = {
+  id: number;
+  name: string;
+  description: string | null;
+  categoryId: number | null;
+  categoryName: string;
+  price: number;
+  stock: number;
+  status: "active" | "inactive";
+  imageUrl: string | null;
+  tagIds: number[];
+};
+
+export type ProductFormValues = {
+  id?: number;
+  businessId: number;
+  title: string;
+  description: string;
+  product_price: string;
+  pic: string;
+  tag_ids: number[];
+};
+
+function toNumber(value: unknown) {
+  if (value && typeof value === "object" && "toNumber" in value) {
+    return (value as { toNumber: () => number }).toNumber();
+  }
+
+  return Number(value ?? 0);
+}
+
+function formatCustomer(firstName?: string | null, lastName?: string | null) {
+  const name = [firstName, lastName].filter(Boolean).join(" ").trim();
+  return name || "Guest customer";
+}
+
+function mapOrderStatus(status?: number | null): RecentOrderRow["status"] {
+  if (status === 1) return "new";
+  if (status === 2) return "pending";
+  if (status === 3) return "completed";
+  if (status === 0 || status === 4) return "cancelled";
+  return "unknown";
+}
+
+async function getVisitorAccountId() {
+  const session = await getServerSession(authOptions);
+  const id = Number(session?.user?.id);
+
+  if (Number.isFinite(id)) {
+    return id;
+  }
+
+  if (!session?.user?.email) {
+    return null;
+  }
+
+  const user = await prisma.visitors_account.findUnique({
+    where: { EMAIL_ADDRESS: session.user.email },
+  });
+
+  return user?.VISITORS_ACCOUNT_ID ? Number(user.VISITORS_ACCOUNT_ID) : null;
+}
+
+async function requireBusinessOwner() {
+  const visitorAccountId = await getVisitorAccountId();
+
+  if (!visitorAccountId) {
+    throw new Error("Unauthorized");
+  }
+
+  const owner = await prisma.business_owner.findFirst({
+    where: { VISITORS_ACCOUNT_ID: visitorAccountId },
+  });
+
+  if (!owner) {
+    throw new Error("Business owner not found");
+  }
+
+  return owner;
+}
+
+export async function userOwnsBusiness(businessId: number) {
+  const owner = await requireBusinessOwner();
+  const access = await prisma.business_owner_2_business.findFirst({
+    where: {
+      BUSINESS_OWNER_ID: BigInt(owner.BUSINESS_OWNER_ID),
+      BUSINESS_ID: BigInt(businessId),
+    },
+  });
+
+  return Boolean(access);
+}
+
+export async function requireBusinessAccess(businessId: number) {
+  const hasAccess = await userOwnsBusiness(businessId);
+
+  if (!hasAccess) {
+    throw new Error("Forbidden");
+  }
+}
+
+export async function getOwnedBusinesses(): Promise<AdminBusinessCard[]> {
+  const owner = await requireBusinessOwner();
+  const links = await prisma.business_owner_2_business.findMany({
+    where: { BUSINESS_OWNER_ID: BigInt(owner.BUSINESS_OWNER_ID) },
+    orderBy: { BUSINESS_OWNER_2_BUSINESS_ID: "desc" },
+  });
+  const businessIds = links
+    .map((link) => (link.BUSINESS_ID === null ? null : Number(link.BUSINESS_ID)))
+    .filter((id): id is number => id !== null);
+
+  if (!businessIds.length) return [];
+
+  const businesses = await prisma.business.findMany({
+    where: { BUSINESS_ID: { in: businessIds } },
+  });
+
+  return businessIds.map((businessId) => {
+    const business = businesses.find((item) => item.BUSINESS_ID === businessId);
+
+    return {
+      id: businessId,
+      name: business?.BUSINESS_NAME || `Business #${businessId}`,
+      shortName: business?.SHORT_NAME || null,
+      logo: business?.LOGO || null,
+      imageUrl: business?.IMAGE_URL || null,
+      town: business?.ADDRESS_TOWN || null,
+      status: business?.STATUS === 1 ? "active" : "inactive",
+    };
+  });
+}
+
+export async function getBusinessDashboardData(businessId: number) {
+  await requireBusinessAccess(businessId);
+
+  const [orders, products] = await Promise.all([
+    prisma.business_order.findMany({
+      where: { BUSINESS_ID: businessId },
+      orderBy: { CREATION_DATETIME: "desc" },
+    }),
+    prisma.business_product.findMany({
+      where: { BUSINESS_ID: businessId },
+    }),
+  ]);
+
+  const recentOrders = orders.slice(0, 10);
+  const recentOrderIds = recentOrders.map((order) => order.BUSINESS_ORDER_ID);
+  const orderDetails = recentOrderIds.length
+    ? await prisma.business_order_detail.findMany({
+        where: { BUSINESS_ORDER_ID: { in: recentOrderIds } },
+      })
+    : [];
+
+  const kpis: DashboardKpis = {
+    totalOrders: orders.length,
+    totalRevenue: orders.reduce(
+      (total, order) => total + toNumber(order.ORDER_FINAL_AMOUNT),
+      0
+    ),
+    pendingOrders: orders.filter(
+      (order) => order.ORDER_STATUS === 1 || order.ORDER_STATUS === 2
+    ).length,
+    activeProducts: products.filter((product) => product.STATUS === 1).length,
+  };
+
+  return {
+    kpis,
+    recentOrders: recentOrders.map<RecentOrderRow>((order) => ({
+      id: order.BUSINESS_ORDER_ID,
+      customer: formatCustomer(order.FIRST_NAME, order.LAST_NAME),
+      items: orderDetails
+        .filter((detail) => detail.BUSINESS_ORDER_ID === order.BUSINESS_ORDER_ID)
+        .reduce((total, detail) => total + (detail.ORDER_QUANTITY || 0), 0),
+      total: toNumber(order.ORDER_FINAL_AMOUNT),
+      status: mapOrderStatus(order.ORDER_STATUS),
+      createdAt: order.CREATION_DATETIME?.toISOString() || null,
+    })),
+  };
+}
+
+export async function getProductsAdminData(businessId: number) {
+  await requireBusinessAccess(businessId);
+
+  const [products, categories, productTags, categoryTags] = await Promise.all([
+    prisma.business_product.findMany({
+      where: { BUSINESS_ID: businessId },
+      orderBy: { BUSINESS_PRODUCT_ID: "desc" },
+    }),
+    prisma.business_product_category.findMany({
+      where: { BUSINESS_ID: businessId },
+      orderBy: { TITLE: "asc" },
+    }),
+    prisma.business_product_2_tag.findMany(),
+    prisma.business_product_category_2_tag.findMany(),
+  ]);
+
+  const categoryOptions = categories.map<ProductCategoryOption>((category) => ({
+    id: category.BUSINESS_PRODUCT_CATEGORY_ID,
+    title: category.TITLE || `Category #${category.BUSINESS_PRODUCT_CATEGORY_ID}`,
+  }));
+
+  const rows = products.map<AdminProductRow>((product) => {
+    const tagIds = productTags
+      .filter((tag) => tag.BUSINESS_PRODUCT_ID === product.BUSINESS_PRODUCT_ID)
+      .map((tag) => tag.BUSINESS_PRODUCT_TAG_ID)
+      .filter((tagId): tagId is number => tagId !== null);
+    const matchedCategory = categories.find((category) => {
+      const tagsForCategory = categoryTags
+        .filter(
+          (tag) =>
+            tag.BUSINESS_PRODUCT_CATEGORY_ID ===
+            category.BUSINESS_PRODUCT_CATEGORY_ID
+        )
+        .map((tag) => tag.BUSINESS_PRODUCT_TAG_ID);
+
+      return tagIds.some((tagId) => tagsForCategory.includes(tagId));
+    });
+
+    return {
+      id: product.BUSINESS_PRODUCT_ID,
+      name: product.TITLE,
+      description: product.DESCRIPTION,
+      categoryId: matchedCategory?.BUSINESS_PRODUCT_CATEGORY_ID || null,
+      categoryName: matchedCategory?.TITLE || "Uncategorized",
+      price: toNumber(product.PRODUCT_PRICE),
+      stock: product.INVENTORY_AVAILABLE ?? product.INVENTORY_ON_HAND ?? 0,
+      status: product.STATUS === 1 ? "active" : "inactive",
+      imageUrl: product.PIC,
+      tagIds,
+    };
+  });
+
+  return {
+    products: rows,
+    categories: categoryOptions,
+  };
+}
+
+export async function saveProduct(values: ProductFormValues) {
+  await requireBusinessAccess(values.businessId);
+
+  if (!values.title.trim() || !values.product_price.trim()) {
+    throw new Error("Product name and price are required.");
+  }
+
+  const productData = {
+    BUSINESS_ID: values.businessId,
+    TITLE: values.title.trim(),
+    DESCRIPTION: values.description.trim(),
+    PRODUCT_PRICE: values.product_price.trim(),
+    PIC: values.pic.trim() || null,
+  };
+
+  await prisma.$transaction(async (tx) => {
+    if (values.id) {
+      const existingProduct = await tx.business_product.findUnique({
+        where: { BUSINESS_PRODUCT_ID: values.id },
+      });
+
+      if (!existingProduct || existingProduct.BUSINESS_ID !== values.businessId) {
+        throw new Error("Product not found.");
+      }
+
+      await tx.business_product.update({
+        where: { BUSINESS_PRODUCT_ID: values.id },
+        data: productData,
+      });
+
+      await tx.business_product_2_tag.deleteMany({
+        where: { BUSINESS_PRODUCT_ID: values.id },
+      });
+
+      if (existingProduct.PIC && values.pic && existingProduct.PIC !== values.pic) {
+        await storage.delete(existingProduct.PIC).catch(console.error);
+      }
+    } else {
+      const createdProduct = await tx.business_product.create({
+        data: productData,
+      });
+
+      values.id = createdProduct.BUSINESS_PRODUCT_ID;
+    }
+
+    if (values.id && values.tag_ids.length) {
+      await tx.business_product_2_tag.createMany({
+        data: values.tag_ids.map((tagId) => ({
+          BUSINESS_PRODUCT_ID: values.id,
+          BUSINESS_PRODUCT_TAG_ID: tagId,
+          CREATION_DATETIME: new Date(),
+        })),
+      });
+    }
+  });
+
+  revalidatePath(`/dashboard/${values.businessId}/products`);
+  revalidatePath(`/dashboard/${values.businessId}`);
+}
+
+export async function toggleProductStatus(
+  businessId: number,
+  productId: number,
+  nextStatus: "active" | "inactive"
+) {
+  await requireBusinessAccess(businessId);
+
+  await prisma.business_product.update({
+    where: { BUSINESS_PRODUCT_ID: productId },
+    data: { STATUS: nextStatus === "active" ? 1 : 0 },
+  });
+
+  revalidatePath(`/dashboard/${businessId}/products`);
+  revalidatePath(`/dashboard/${businessId}`);
+}
+
+export async function deleteProduct(businessId: number, productId: number) {
+  await requireBusinessAccess(businessId);
+
+  const product = await prisma.business_product.findUnique({
+    where: { BUSINESS_PRODUCT_ID: productId },
+  });
+
+  if (!product || product.BUSINESS_ID !== businessId) {
+    throw new Error("Product not found.");
+  }
+
+  if (product.PIC) {
+    await storage.delete(product.PIC).catch(console.error);
+  }
+
+  await prisma.$transaction([
+    prisma.business_product_2_tag.deleteMany({
+      where: { BUSINESS_PRODUCT_ID: productId },
+    }),
+    prisma.business_product.delete({
+      where: { BUSINESS_PRODUCT_ID: productId },
+    }),
+  ]);
+
+  revalidatePath(`/dashboard/${businessId}/products`);
+  revalidatePath(`/dashboard/${businessId}`);
+}
