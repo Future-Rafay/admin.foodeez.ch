@@ -1,0 +1,6 @@
+ALTER TABLE `business_product_tag`
+ADD COLUMN `STATUS` TINYINT NULL DEFAULT 1;
+
+UPDATE `business_product_tag`
+SET `STATUS` = 1
+WHERE `STATUS` IS NULL;

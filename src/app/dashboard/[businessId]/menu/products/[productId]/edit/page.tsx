@@ -18,11 +18,11 @@ export default function EditProductPage() {
   useEffect(() => {
     if (!businessId || !productId) return;
     setLoading(true);
-    fetch(`/api/products?businessId=${businessId}`)
+    fetch(`/api/dashboard/${businessId}/products?pageSize=100`)
       .then((res) => res.json())
       .then((data) => {
-        const found = data.find(
-          (p: any) => String(p.BUSINESS_PRODUCT_ID) === String(productId)
+        const found = data.products.find(
+          (p: any) => String(p.id) === String(productId)
         );
         setProduct(found);
         setLoading(false);
@@ -43,11 +43,10 @@ export default function EditProductPage() {
     setSaving(true);
     setError("");
     try {
-      const res = await fetch("/api/products", {
-        method: "PUT",
+      const res = await fetch(`/api/dashboard/${businessId}/products/${productId}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: Number(productId),
           title: values.title,
           description: values.description,
           product_price: values.product_price,
@@ -88,12 +87,12 @@ export default function EditProductPage() {
       <ProductForm
         mode="edit"
         initialValues={{
-          title: product.TITLE,
-          description: product.DESCRIPTION,
-          product_price: product.PRODUCT_PRICE,
-          pic: product.PIC,
-          tag_ids:
-            product.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) || [],
+          title: product.title,
+          description: product.description,
+          product_price: product.productPrice,
+          pic: product.pic,
+          tag_ids: product.tagIds || [],
+          categoryId: product.categoryId,
         }}
         onSubmit={handleEdit}
         loading={saving}

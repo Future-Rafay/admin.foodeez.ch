@@ -60,6 +60,7 @@ export type ProductFormValues = {
   product_price: string;
   pic: string;
   tag_ids: number[];
+  categoryId?: number | null;
 };
 
 function toNumber(value: unknown) {
@@ -224,11 +225,17 @@ export async function getProductsAdminData(businessId: number) {
 
   const [products, categories, productTags, categoryTags] = await Promise.all([
     prisma.business_product.findMany({
-      where: { BUSINESS_ID: businessId },
+      where: {
+        BUSINESS_ID: businessId,
+        STATUS: { not: -1 },
+      },
       orderBy: { BUSINESS_PRODUCT_ID: "desc" },
     }),
     prisma.business_product_category.findMany({
-      where: { BUSINESS_ID: businessId },
+      where: {
+        BUSINESS_ID: businessId,
+        STATUS: { not: -1 },
+      },
       orderBy: { TITLE: "asc" },
     }),
     prisma.business_product_2_tag.findMany(),
@@ -284,6 +291,47 @@ export async function saveProduct(values: ProductFormValues) {
     throw new Error("Product name and price are required.");
   }
 
+  const explicitTagIds = Array.from(new Set(values.tag_ids));
+  const categoryTagIds =
+    values.categoryId && Number.isInteger(values.categoryId)
+      ? (
+          await prisma.business_product_category_2_tag.findMany({
+            where: { BUSINESS_PRODUCT_CATEGORY_ID: values.categoryId },
+          })
+        )
+          .map((tag) => tag.BUSINESS_PRODUCT_TAG_ID)
+          .filter((tagId): tagId is number => tagId !== null)
+      : [];
+  const tagIds = Array.from(new Set([...explicitTagIds, ...categoryTagIds]));
+
+  if (values.categoryId) {
+    const category = await prisma.business_product_category.findFirst({
+      where: {
+        BUSINESS_PRODUCT_CATEGORY_ID: values.categoryId,
+        BUSINESS_ID: values.businessId,
+        STATUS: { not: -1 },
+      },
+    });
+
+    if (!category) {
+      throw new Error("Category not found.");
+    }
+  }
+
+  if (tagIds.length) {
+    const ownedTags = await prisma.business_product_tag.count({
+      where: {
+        BUSINESS_ID: values.businessId,
+        BUSINESS_PRODUCT_TAG_ID: { in: tagIds },
+        STATUS: { not: -1 },
+      },
+    });
+
+    if (ownedTags !== tagIds.length) {
+      throw new Error("One or more tags are invalid.");
+    }
+  }
+
   const productData = {
     BUSINESS_ID: values.businessId,
     TITLE: values.title.trim(),
@@ -322,9 +370,9 @@ export async function saveProduct(values: ProductFormValues) {
       values.id = createdProduct.BUSINESS_PRODUCT_ID;
     }
 
-    if (values.id && values.tag_ids.length) {
+    if (values.id && tagIds.length) {
       await tx.business_product_2_tag.createMany({
-        data: values.tag_ids.map((tagId) => ({
+        data: tagIds.map((tagId) => ({
           BUSINESS_PRODUCT_ID: values.id,
           BUSINESS_PRODUCT_TAG_ID: tagId,
           CREATION_DATETIME: new Date(),
@@ -344,6 +392,18 @@ export async function toggleProductStatus(
 ) {
   await requireBusinessAccess(businessId);
 
+  const product = await prisma.business_product.findFirst({
+    where: {
+      BUSINESS_PRODUCT_ID: productId,
+      BUSINESS_ID: businessId,
+      STATUS: { not: -1 },
+    },
+  });
+
+  if (!product) {
+    throw new Error("Product not found.");
+  }
+
   await prisma.business_product.update({
     where: { BUSINESS_PRODUCT_ID: productId },
     data: { STATUS: nextStatus === "active" ? 1 : 0 },
@@ -356,26 +416,22 @@ export async function toggleProductStatus(
 export async function deleteProduct(businessId: number, productId: number) {
   await requireBusinessAccess(businessId);
 
-  const product = await prisma.business_product.findUnique({
-    where: { BUSINESS_PRODUCT_ID: productId },
+  const product = await prisma.business_product.findFirst({
+    where: {
+      BUSINESS_PRODUCT_ID: productId,
+      BUSINESS_ID: businessId,
+      STATUS: { not: -1 },
+    },
   });
 
-  if (!product || product.BUSINESS_ID !== businessId) {
+  if (!product) {
     throw new Error("Product not found.");
   }
 
-  if (product.PIC) {
-    await storage.delete(product.PIC).catch(console.error);
-  }
-
-  await prisma.$transaction([
-    prisma.business_product_2_tag.deleteMany({
-      where: { BUSINESS_PRODUCT_ID: productId },
-    }),
-    prisma.business_product.delete({
-      where: { BUSINESS_PRODUCT_ID: productId },
-    }),
-  ]);
+  await prisma.business_product.update({
+    where: { BUSINESS_PRODUCT_ID: productId },
+    data: { STATUS: -1 },
+  });
 
   revalidatePath(`/dashboard/${businessId}/menu/products`);
   revalidatePath(`/dashboard/${businessId}`);

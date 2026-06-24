@@ -1,12 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, X } from "lucide-react";
-import { business_product_tag } from "@prisma/client";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
+
+type TagOption = {
+  id: number;
+  title: string;
+};
 
 interface TagFilterProps {
   selectedTags: number[];
@@ -17,27 +22,32 @@ interface TagFilterProps {
 export default function TagFilter({ selectedTags, onTagsChange, className }: TagFilterProps) {
   const businessId = useBusinessId();
   const [open, setOpen] = useState(false);
-  const [tags, setTags] = useState<business_product_tag[]>([]);
+  const [tags, setTags] = useState<TagOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadTags = useCallback(async () => {
     if (!businessId) return;
-    loadTags();
-  }, [businessId]);
-
-  async function loadTags() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/tags?businessId=${businessId}`);
+      const res = await fetch(`/api/dashboard/${businessId}/tags`);
       if (!res.ok) throw new Error("Failed to load tags");
       const data = await res.json();
-      setTags(data);
+      setTags(
+        (data.tags || data).map((tag: any) => ({
+          id: tag.id ?? tag.BUSINESS_PRODUCT_TAG_ID,
+          title: tag.title ?? tag.TITLE ?? "Untitled tag",
+        }))
+      );
     } catch (error) {
       console.error("Failed to load tags:", error);
     } finally {
       setLoading(false);
     }
-  }
+  }, [businessId]);
+
+  useEffect(() => {
+    loadTags();
+  }, [loadTags]);
 
   function toggleTag(tagId: number) {
     if (selectedTags.includes(tagId)) {
@@ -88,21 +98,21 @@ export default function TagFilter({ selectedTags, onTagsChange, className }: Tag
               <CommandGroup className="max-h-64 overflow-auto">
                 {tags.map(tag => (
                   <CommandItem
-                    key={tag.BUSINESS_PRODUCT_TAG_ID}
-                    value={tag.TITLE || ""}
-                    onSelect={() => toggleTag(tag.BUSINESS_PRODUCT_TAG_ID)}
+                    key={tag.id}
+                    value={tag.title}
+                    onSelect={() => toggleTag(tag.id)}
                     className="cursor-pointer"
                   >
                     <div className={`mr-3 flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
-                      selectedTags.includes(tag.BUSINESS_PRODUCT_TAG_ID) 
+                      selectedTags.includes(tag.id) 
                         ? 'bg-foodeez-primary border-foodeez-primary' 
                         : 'border-gray-300'
                     }`}>
-                      {selectedTags.includes(tag.BUSINESS_PRODUCT_TAG_ID) && (
+                      {selectedTags.includes(tag.id) && (
                         <Check className="h-3 w-3 text-white" />
                       )}
                     </div>
-                    <span className="text-sm">{tag.TITLE}</span>
+                    <span className="text-sm">{tag.title}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -126,20 +136,20 @@ export default function TagFilter({ selectedTags, onTagsChange, className }: Tag
       {selectedTags.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-2">
           {selectedTags.map(tagId => {
-            const tag = tags.find(t => t.BUSINESS_PRODUCT_TAG_ID === tagId);
+            const tag = tags.find(t => t.id === tagId);
             if (!tag) return null;
             return (
               <Badge
-                key={tag.BUSINESS_PRODUCT_TAG_ID}
+                key={tag.id}
                 variant="secondary"
                 className="pl-3 pr-2 py-1.5 flex items-center gap-2 bg-foodeez-primary/10 text-foodeez-primary border border-foodeez-primary/20 hover:bg-foodeez-primary/15 transition-colors"
               >
-                <span className="text-sm font-medium">{tag.TITLE}</span>
+                <span className="text-sm font-medium">{tag.title}</span>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
-                    removeTag(tag.BUSINESS_PRODUCT_TAG_ID);
+                    removeTag(tag.id);
                   }}
                   className="hover:bg-foodeez-primary/20 rounded-full p-0.5 transition-colors"
                 >

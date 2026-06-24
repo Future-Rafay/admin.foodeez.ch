@@ -1,6 +1,8 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Decimal } from "@prisma/client/runtime/library";
+import { Prisma } from "../../prisma/generated/prisma/client";
+
+type Decimal = Prisma.Decimal;
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

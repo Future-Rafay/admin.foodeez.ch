@@ -51,6 +51,7 @@ model business {
   APPROVED           Int?               @default(0) @db.TinyInt
   STATUS             Int?               @default(0) @db.TinyInt
   business_product   business_product[]
+  business_settings  business_settings?
 }
 
 model business_2_business_category {
@@ -347,6 +348,7 @@ model business_product_tag {
   CREATION_DATETIME       DateTime? @db.DateTime(0)
   BUSINESS_ID             Int?
   TITLE                   String?   @db.VarChar(45)
+  STATUS                  Int?      @default(1) @db.TinyInt
 }
 
 model reserve_table {
@@ -510,6 +512,15 @@ model business_2_business_category2 {
   DISPLAY_SEQ                   Int?
 
   @@ignore
+}
+
+model business_settings {
+  BUSINESS_SETTINGS_ID     Int      @id @default(autoincrement())
+  BUSINESS_ID              Int      @unique(map: "BusinessSettings_businessId_key")
+  DELIVERY_RANGE_ZIP_CODES String?  @db.Text
+  CREATION_DATETIME        DateTime @default(now()) @db.DateTime(0)
+  LAST_UPDATE_DATETIME     DateTime @default(now()) @db.DateTime(0)
+  business                 business @relation(fields: [BUSINESS_ID], references: [BUSINESS_ID], onDelete: Cascade, map: "BusinessSettings_businessId_fkey")
 }
 
 view adlink_view {

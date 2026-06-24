@@ -18,12 +18,11 @@ export default function EditCategoryPage() {
   useEffect(() => {
     if (!businessId || !categoryId) return;
     setLoading(true);
-    fetch(`/api/categories?businessId=${businessId}`)
+    fetch(`/api/dashboard/${businessId}/categories`)
       .then((res) => res.json())
       .then((data) => {
-        const found = data.find(
-          (c: any) =>
-            String(c.BUSINESS_PRODUCT_CATEGORY_ID) === String(categoryId)
+        const found = data.categories.find(
+          (c: any) => String(c.id) === String(categoryId)
         );
         setCategory(found);
         setLoading(false);
@@ -44,18 +43,20 @@ export default function EditCategoryPage() {
     setSaving(true);
     setError("");
     try {
-      const res = await fetch("/api/categories", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: Number(categoryId),
-          title: values.title,
-          description: values.description,
-          pic: values.pic,
-          status: values.status,
-          tag_ids: values.tag_ids,
-        }),
-      });
+      const res = await fetch(
+        `/api/dashboard/${businessId}/categories/${categoryId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: values.title,
+            description: values.description,
+            pic: values.pic,
+            status: values.status === 1 ? "active" : "inactive",
+            tag_ids: values.tag_ids,
+          }),
+        }
+      );
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to update category");
@@ -89,13 +90,11 @@ export default function EditCategoryPage() {
       <CategoryForm
         mode="edit"
         initialValues={{
-          title: category.TITLE,
-          description: category.DESCRIPTION,
-          pic: category.PIC,
-          status: category.STATUS,
-          tag_ids:
-            category.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) ||
-            [],
+          title: category.title,
+          description: category.description,
+          pic: category.pic,
+          status: category.status === "active" ? 1 : 0,
+          tag_ids: category.tagIds || [],
         }}
         onSubmit={handleEdit}
         loading={saving}

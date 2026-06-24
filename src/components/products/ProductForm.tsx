@@ -6,9 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import ImageUploadField from "@/components/ui/ImageUploadField";
 import { uploadImagesToS3 } from "@/lib/media-upload";
 import TagSelect from "./TagSelect";
+import { ProductCategoryOption } from "@/services/admin-data";
 
 interface ProductFormProps {
   mode: "add" | "edit";
@@ -18,6 +26,7 @@ interface ProductFormProps {
     product_price?: string | number;
     pic?: string;
     tag_ids?: number[];
+    categoryId?: number | null;
   };
   onSubmit: (values: {
     title: string;
@@ -25,9 +34,11 @@ interface ProductFormProps {
     product_price: string;
     pic: string;
     tag_ids: number[];
+    categoryId: number | null;
   }) => Promise<void>;
   loading?: boolean;
   error?: string;
+  categoryOptions?: ProductCategoryOption[];
 }
 
 export default function ProductForm({
@@ -36,6 +47,7 @@ export default function ProductForm({
   onSubmit,
   loading,
   error,
+  categoryOptions = [],
 }: ProductFormProps) {
   const [form, setForm] = useState({
     title: initialValues?.title || "",
@@ -43,6 +55,7 @@ export default function ProductForm({
     product_price: initialValues?.product_price?.toString() || "",
     pic: initialValues?.pic || "",
     tag_ids: initialValues?.tag_ids || [],
+    categoryId: initialValues?.categoryId?.toString() || "none",
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -94,6 +107,7 @@ export default function ProductForm({
       product_price: form.product_price.trim(),
       pic: picUrl,
       tag_ids: form.tag_ids,
+      categoryId: form.categoryId === "none" ? null : Number(form.categoryId),
     });
   }
 
@@ -169,6 +183,34 @@ export default function ProductForm({
               className="text-lg py-3 px-4 mt-1"
             />
           </div>
+
+          {categoryOptions.length > 0 && (
+            <div>
+              <Label htmlFor="category">Category</Label>
+              <Select
+                value={form.categoryId}
+                onValueChange={(value) =>
+                  setForm((f) => ({ ...f, categoryId: value }))
+                }
+                disabled={isBusy}
+              >
+                <SelectTrigger id="category" className="mt-1 h-11 w-full">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No category</SelectItem>
+                  {categoryOptions.map((category) => (
+                    <SelectItem key={category.id} value={category.id.toString()}>
+                      {category.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-2 text-xs text-gray-500">
+                Products inherit category membership through the category tags.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

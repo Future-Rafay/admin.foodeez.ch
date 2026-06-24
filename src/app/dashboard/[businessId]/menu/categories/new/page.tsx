@@ -21,15 +21,14 @@ export default function AddCategoryPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/categories", {
+      const res = await fetch(`/api/dashboard/${businessId}/categories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          businessId: Number(businessId),
           title: values.title,
           description: values.description,
           pic: values.pic,
-          status: values.status,
+          status: values.status === 1 ? "active" : "inactive",
           tag_ids: values.tag_ids,
         }),
       });

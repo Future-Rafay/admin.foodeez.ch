@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordShell />}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -56,7 +64,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-foodeez-primary/10 to-foodeez-secondary/10 px-4">
+    <ResetPasswordShell>
       <Card className="w-full max-w-md shadow-2xl border-none">
         <CardHeader>
           <CardTitle className="text-3xl md:text-4xl font-bold text-center text-foodeez-primary">
@@ -111,6 +119,14 @@ export default function ResetPasswordPage() {
           </form>
         </CardContent>
       </Card>
+    </ResetPasswordShell>
+  );
+}
+
+function ResetPasswordShell({ children }: { children?: React.ReactNode }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-foodeez-primary/10 to-foodeez-secondary/10 px-4">
+      {children}
     </div>
   );
 }

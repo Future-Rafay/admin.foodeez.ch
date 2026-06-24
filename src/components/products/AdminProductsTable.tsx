@@ -87,6 +87,8 @@ export default function AdminProductsTable({
   const [deleteTarget, setDeleteTarget] = useState<AdminProductRow | null>(null);
   const [formError, setFormError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     setProducts(initialProducts);
@@ -119,6 +121,15 @@ export default function AdminProductsTable({
         return String(firstValue).localeCompare(String(secondValue)) * direction;
       });
   }, [categoryFilter, products, search, sortDirection, sortKey]);
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const paginatedProducts = filteredProducts.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [categoryFilter, search]);
 
   function handleSort(nextKey: SortKey) {
     if (sortKey === nextKey) {
@@ -142,6 +153,7 @@ export default function AdminProductsTable({
     product_price: string;
     pic: string;
     tag_ids: number[];
+    categoryId: number | null;
   }) {
     setFormError("");
 
@@ -314,7 +326,7 @@ export default function AdminProductsTable({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.map((product) => (
+                {paginatedProducts.map((product) => (
                   <TableRow key={product.id} className="hover:bg-gray-50">
                     <TableCell className="min-w-[220px]">
                       <div>
@@ -377,6 +389,33 @@ export default function AdminProductsTable({
                 ))}
               </TableBody>
             </Table>
+            <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-sm text-gray-500">
+              <span>
+                Showing {(page - 1) * pageSize + 1}-
+                {Math.min(page * pageSize, filteredProducts.length)} of{" "}
+                {filteredProducts.length}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
+                  disabled={page === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
@@ -430,9 +469,11 @@ export default function AdminProductsTable({
                       product_price: selectedProduct.price,
                       pic: selectedProduct.imageUrl || "",
                       tag_ids: selectedProduct.tagIds,
+                      categoryId: selectedProduct.categoryId,
                     }
                   : undefined
               }
+              categoryOptions={categories}
               onSubmit={handleSubmit}
               loading={isPending}
               error={formError}
@@ -451,11 +492,11 @@ export default function AdminProductsTable({
           <DialogHeader>
             <DialogTitle>Delete product</DialogTitle>
             <DialogDescription>
-              This will permanently remove{" "}
+              This will archive{" "}
               <span className="font-medium text-gray-950">
                 {deleteTarget?.name}
               </span>{" "}
-              from the catalog.
+              and hide it from the catalog.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -21,11 +21,10 @@ export default function AddProductPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/products", {
+      const res = await fetch(`/api/dashboard/${businessId}/products`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          businessId: Number(businessId),
           title: values.title,
           description: values.description,
           product_price: values.product_price,
