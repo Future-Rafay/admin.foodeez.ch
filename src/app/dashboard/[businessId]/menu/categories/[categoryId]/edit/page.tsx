@@ -1,66 +1,70 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import ProductForm from "@/components/products/ProductForm";
+import CategoryForm from "@/components/products/CategoryForm";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
 
-export default function EditProductPage() {
+export default function EditCategoryPage() {
   const router = useRouter();
   const params = useParams();
   const businessId = useBusinessId();
-  const productId = params?.productId as string;
+  const categoryId = params?.categoryId as string;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [product, setProduct] = useState<any>(null);
+  const [category, setCategory] = useState<any>(null);
 
   useEffect(() => {
-    if (!businessId || !productId) return;
+    if (!businessId || !categoryId) return;
     setLoading(true);
-    fetch(`/api/products?businessId=${businessId}`)
+    fetch(`/api/categories?businessId=${businessId}`)
       .then((res) => res.json())
       .then((data) => {
         const found = data.find(
-          (p: any) => String(p.BUSINESS_PRODUCT_ID) === String(productId)
+          (c: any) =>
+            String(c.BUSINESS_PRODUCT_CATEGORY_ID) === String(categoryId)
         );
-        setProduct(found);
+        setCategory(found);
         setLoading(false);
       })
       .catch(() => {
-        setError("Failed to load product");
+        setError("Failed to load category");
         setLoading(false);
       });
-  }, [businessId, productId]);
+  }, [businessId, categoryId]);
 
   async function handleEdit(values: {
     title: string;
     description: string;
-    product_price: string;
     pic: string;
+    status: number;
     tag_ids: number[];
   }) {
     setSaving(true);
     setError("");
     try {
-      const res = await fetch("/api/products", {
+      const res = await fetch("/api/categories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: Number(productId),
+          id: Number(categoryId),
           title: values.title,
           description: values.description,
-          product_price: values.product_price,
           pic: values.pic,
+          status: values.status,
           tag_ids: values.tag_ids,
         }),
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to update product");
+        throw new Error(data.error || "Failed to update category");
       }
-      router.push(`/dashboard/${businessId}/products`);
+      router.push(`/dashboard/${businessId}/menu/categories`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update product");
+      setError(
+        err instanceof Error ? err.message : "Failed to update category"
+      );
     } finally {
       setSaving(false);
     }
@@ -68,33 +72,30 @@ export default function EditProductPage() {
 
   if (loading) {
     return (
-      <div className="text-center text-gray-400 py-12">Loading product...</div>
+      <div className="py-12 text-center text-gray-400">Loading category...</div>
     );
   }
-  if (!product) {
+  if (!category) {
     return (
-      <div className="text-center text-red-500 py-12">Product not found.</div>
+      <div className="py-12 text-center text-red-500">Category not found.</div>
     );
   }
 
   return (
-    <div className=" p-4 md:p-6">
-      <div className="flex items-center gap-3 mb-6">
-        
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Edit Product</h1>
-         
-        </div>
+    <div className="p-4 md:p-6">
+      <div className="mb-6 flex items-center gap-3">
+        <h1 className="text-2xl font-bold text-gray-900">Edit Category</h1>
       </div>
-      <ProductForm
+      <CategoryForm
         mode="edit"
         initialValues={{
-          title: product.TITLE,
-          description: product.DESCRIPTION,
-          product_price: product.PRODUCT_PRICE,
-          pic: product.PIC,
+          title: category.TITLE,
+          description: category.DESCRIPTION,
+          pic: category.PIC,
+          status: category.STATUS,
           tag_ids:
-            product.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) || [],
+            category.tags?.map((tag: any) => tag.BUSINESS_PRODUCT_TAG_ID) ||
+            [],
         }}
         onSubmit={handleEdit}
         loading={saving}

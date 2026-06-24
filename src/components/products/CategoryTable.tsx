@@ -58,11 +58,11 @@ export default function CategoryTable() {
   }, [selectedTags, categories]);
 
   function handleAdd() {
-    router.push(`/dashboard/${businessId}/categories/add`);
+    router.push(`/dashboard/${businessId}/menu/categories/new`);
   }
 
   function handleEdit(id: number) {
-    router.push(`/dashboard/${businessId}/categories/${id}/edit`);
+    router.push(`/dashboard/${businessId}/menu/categories/${id}/edit`);
   }
 
   function handleDelete(id: number) {

@@ -58,11 +58,11 @@ export default function ProductTable() {
   }, [selectedTags, products]);
 
   function handleAdd() {
-    router.push(`/dashboard/${businessId}/products/add`);
+    router.push(`/dashboard/${businessId}/menu/products/new`);
   }
 
   function handleEdit(id: number) {
-    router.push(`/dashboard/${businessId}/products/${id}/edit`);
+    router.push(`/dashboard/${businessId}/menu/products/${id}/edit`);
   }
 
   function handleDelete(id: number) {

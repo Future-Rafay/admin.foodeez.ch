@@ -13,6 +13,12 @@ interface AdminShellProps {
   children: ReactNode;
 }
 
+export interface AdminBusinessIdentity {
+  name: string;
+  logoUrl?: string | null;
+  status?: "active" | "inactive";
+}
+
 export default function AdminShell({
   businessId,
   restaurantName,
@@ -23,6 +29,8 @@ export default function AdminShell({
   const [resolvedRestaurantName, setResolvedRestaurantName] = useState(
     restaurantName
   );
+  const [businessIdentity, setBusinessIdentity] =
+    useState<AdminBusinessIdentity | null>(null);
 
   useEffect(() => {
     setBusinessId(businessId);
@@ -44,9 +52,17 @@ export default function AdminShell({
         const businessDetails = await getBusinessDetail(numericBusinessId);
         const business = businessDetails?.[0];
         if (isMounted) {
-          setResolvedRestaurantName(
-            business?.BUSINESS_NAME || business?.SHORT_NAME || undefined
-          );
+          const name =
+            business?.BUSINESS_NAME ||
+            business?.SHORT_NAME ||
+            restaurantName ||
+            "Selected restaurant";
+          setResolvedRestaurantName(name);
+          setBusinessIdentity({
+            name,
+            logoUrl: business?.LOGO || business?.IMAGE_URL || null,
+            status: business?.STATUS === 1 ? "active" : "inactive",
+          });
         }
       } catch (error) {
         console.error("Failed to load admin shell business details:", error);
@@ -66,6 +82,7 @@ export default function AdminShell({
         <AdminSidebar
           businessId={businessId}
           restaurantName={resolvedRestaurantName}
+          business={businessIdentity}
         />
       </div>
 
@@ -76,6 +93,7 @@ export default function AdminShell({
             <AdminMobileDrawer
               businessId={businessId}
               restaurantName={resolvedRestaurantName}
+              business={businessIdentity}
               isOpen={isMobileNavOpen}
               onOpenChange={setIsMobileNavOpen}
             />

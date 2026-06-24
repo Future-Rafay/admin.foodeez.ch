@@ -333,7 +333,7 @@ export async function saveProduct(values: ProductFormValues) {
     }
   });
 
-  revalidatePath(`/dashboard/${values.businessId}/products`);
+  revalidatePath(`/dashboard/${values.businessId}/menu/products`);
   revalidatePath(`/dashboard/${values.businessId}`);
 }
 
@@ -349,7 +349,7 @@ export async function toggleProductStatus(
     data: { STATUS: nextStatus === "active" ? 1 : 0 },
   });
 
-  revalidatePath(`/dashboard/${businessId}/products`);
+  revalidatePath(`/dashboard/${businessId}/menu/products`);
   revalidatePath(`/dashboard/${businessId}`);
 }
 
@@ -377,6 +377,6 @@ export async function deleteProduct(businessId: number, productId: number) {
     }),
   ]);
 
-  revalidatePath(`/dashboard/${businessId}/products`);
+  revalidatePath(`/dashboard/${businessId}/menu/products`);
   revalidatePath(`/dashboard/${businessId}`);
 }

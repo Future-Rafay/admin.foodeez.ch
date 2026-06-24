@@ -9,7 +9,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Home, Package, Tag, Plus, Edit, Settings, BarChart3, Users, ShoppingCart } from "lucide-react";
+import { Home, Package, Tag, Plus, Edit, Settings, BarChart3, Users, ShoppingCart, Utensils } from "lucide-react";
 import React from "react";
 
 interface BreadcrumbItem {
@@ -43,10 +43,60 @@ export default function DashboardBreadcrumb() {
     }
 
     // Handle different sections
-    if (segments[2] === "products") {
+    if (segments[2] === "menu") {
+      breadcrumbs.push({
+        label: "Menu",
+        href: `/dashboard/${segments[1]}/menu`,
+        icon: <Utensils className="w-4 h-4" />
+      });
+
+      if (segments[3] === "products") {
+        breadcrumbs.push({
+          label: "Products",
+          href: `/dashboard/${segments[1]}/menu/products`,
+          icon: <Package className="w-4 h-4" />
+        });
+
+        if (segments[4] === "new") {
+          breadcrumbs.push({
+            label: "Add Product",
+            icon: <Plus className="w-4 h-4" />
+          });
+        } else if (segments[4] && segments[5] === "edit") {
+          breadcrumbs.push({
+            label: "Edit Product",
+            icon: <Edit className="w-4 h-4" />
+          });
+        }
+      } else if (segments[3] === "categories") {
+        breadcrumbs.push({
+          label: "Categories",
+          href: `/dashboard/${segments[1]}/menu/categories`,
+          icon: <Tag className="w-4 h-4" />
+        });
+
+        if (segments[4] === "new") {
+          breadcrumbs.push({
+            label: "Add Category",
+            icon: <Plus className="w-4 h-4" />
+          });
+        } else if (segments[4] && segments[5] === "edit") {
+          breadcrumbs.push({
+            label: "Edit Category",
+            icon: <Edit className="w-4 h-4" />
+          });
+        }
+      } else if (segments[3] === "tags") {
+        breadcrumbs.push({
+          label: "Tags",
+          href: `/dashboard/${segments[1]}/menu/tags`,
+          icon: <Tag className="w-4 h-4" />
+        });
+      }
+    } else if (segments[2] === "products") {
       breadcrumbs.push({
         label: "Products",
-        href: `/dashboard/${segments[1]}/products`,
+        href: `/dashboard/${segments[1]}/menu/products`,
         icon: <Package className="w-4 h-4" />
       });
 
@@ -65,7 +115,7 @@ export default function DashboardBreadcrumb() {
     } else if (segments[2] === "categories") {
       breadcrumbs.push({
         label: "Categories",
-        href: `/dashboard/${segments[1]}/products`,
+        href: `/dashboard/${segments[1]}/menu/categories`,
         icon: <Tag className="w-4 h-4" />
       });
 

@@ -3,11 +3,13 @@
 import { useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import type { AdminBusinessIdentity } from "@/components/admin/AdminShell";
 import { cn } from "@/lib/utils";
 
 interface AdminMobileDrawerProps {
   businessId: string;
   restaurantName?: string;
+  business?: AdminBusinessIdentity | null;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -15,6 +17,7 @@ interface AdminMobileDrawerProps {
 export default function AdminMobileDrawer({
   businessId,
   restaurantName,
+  business,
   isOpen,
   onOpenChange,
 }: AdminMobileDrawerProps) {
@@ -84,6 +87,7 @@ export default function AdminMobileDrawer({
           <AdminSidebar
             businessId={businessId}
             restaurantName={restaurantName}
+            business={business}
             onNavigate={() => onOpenChange(false)}
             collapseOnMedium={false}
             className="h-screen w-full bg-white" // FIXED: Mobile sidebar layout
