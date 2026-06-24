@@ -5,7 +5,10 @@ SELECT
     `foodeez`.`visitor_food_journey`.`VISITOR_NAME`,
     'Guest'
   ) AS `VISITOR_NAME`,
-  `foodeez`.`visitor_food_journey`.`VISITOR_PIC` AS `VISITOR_PIC`,
+  IFNULL(
+    `foodeez`.`visitor_food_journey`.`VISITOR_PIC`,
+    ''
+  ) AS `VISITOR_PIC`,
   IFNULL(
     `foodeez`.`visitor_food_journey`.`VISITOR_EMAIL_ADDRESS`,
     'Not Available'

@@ -1,11 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import CategoryForm from "@/components/products/CategoryForm";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+
 
 export default function AddCategoryPage() {
   const router = useRouter();

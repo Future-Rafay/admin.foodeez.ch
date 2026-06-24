@@ -14,10 +14,7 @@ SELECT
   IFNULL(`f`.`DESCRIPTION`, `f`.`TITLE`) AS `PRODUCT_DESCRIPTION`,
   `f`.`PRODUCT_PRICE` AS `PRODUCT_PRICE`,
   `f`.`COMPARE_AS_PRICE` AS `COMPARE_AS_PRICE`,
-  IFNULL(
-    `f`.`PIC`,
-    'https://shining-fun-cae9b3168c.media.strapiapp.com/NOT_AVAILABLE_f2715698fd.jpg'
-  ) AS `PIC`
+  IFNULL(`f`.`PIC`, '') AS `PIC`
 FROM
   (
     (

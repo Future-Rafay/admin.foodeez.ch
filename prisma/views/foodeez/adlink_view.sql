@@ -21,4 +21,4 @@ WHERE
     )
   )
 ORDER BY
-  `foodeez`.`adlinks`.`SEQ`
+  rand()

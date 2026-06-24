@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { CircleUser, LogOut, Settings, Building2 } from "lucide-react";
+import { CircleUser, LogOut, Building2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { signOut } from "next-auth/react";

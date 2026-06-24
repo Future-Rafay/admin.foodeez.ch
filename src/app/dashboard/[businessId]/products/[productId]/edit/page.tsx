@@ -1,11 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
 import ProductForm from "@/components/products/ProductForm";
 import { useBusinessId } from "@/components/providers/BusinessProvider";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
 
 export default function EditProductPage() {
   const router = useRouter();

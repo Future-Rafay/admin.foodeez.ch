@@ -2,27 +2,31 @@ SELECT
   `a`.`CNT` AS `CNT`,
   `a`.`Business_category_id` AS `BUSINESS_CATEGORY_ID`,
   `a`.`Category_name` AS `CATEGORY_NAME`,
-(
-    CASE
-      WHEN (
-        length(
+  REPLACE(
+    (
+      CASE
+        WHEN (
+          length(
+            substr(
+              `a`.`Category_name`,
+              1,
+              locate(' ', `a`.`Category_name`)
+            )
+          ) = 0
+        ) THEN REPLACE(`a`.`Category_name`, '-', ' ')
+        ELSE REPLACE(
           substr(
             `a`.`Category_name`,
             1,
             locate(' ', `a`.`Category_name`)
-          )
-        ) = 0
-      ) THEN REPLACE(`a`.`Category_name`, '-', ' ')
-      ELSE REPLACE(
-        substr(
-          `a`.`Category_name`,
-          1,
-          locate(' ', `a`.`Category_name`)
-        ),
-        '-',
-        ' '
-      )
-    END
+          ),
+          '-',
+          ' '
+        )
+      END
+    ),
+    'Restaurant',
+    'All'
   ) AS `CATEGORY`
 FROM
   (
