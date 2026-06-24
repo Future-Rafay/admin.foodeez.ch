@@ -29,7 +29,7 @@ Important folders:
 - `src/components/products`: product, category, tag tables/forms/actions.
 - `src/components/providers`: app-wide React providers for auth and selected business context.
 - `src/lib`: Prisma, auth, media, upload, S3, and utility helpers.
-- `src/services`: server helpers for dashboard/business/product/order data. `src/services/admin-data.ts` owns the newer server-rendered admin dashboard/product data and server actions. `src/services/orders-management.ts` owns Orders management filtering, KPI aggregation, detail shaping, ownership checks, and status transitions.
+- `src/services`: server helpers for dashboard/business/menu/order/settings data. `src/services/admin-data.ts` owns root dashboard data, selected-business dashboard data, and the current products server actions. `src/services/menu-management.ts` owns the dashboard-scoped Product, Category, and Tag API logic, including ownership checks, relationship shaping, counts, filtering, pagination, and soft deletes. `src/services/orders-management.ts` owns Orders management filtering, KPI aggregation, detail shaping, ownership checks, and status transitions. `src/services/settings-management.ts` owns business settings reads/upserts.
 - `prisma`: Prisma schema, generated Prisma client output, and SQL view files.
 - `public`: logos, SVGs, and static images.
 
@@ -53,10 +53,11 @@ Existing pages:
 - `/dashboard/[businessId]/menu/products`: selected-business product catalog workspace. It server-fetches products/categories and hydrates `AdminProductsTable` for search, category filtering, sortable table columns, add/edit modal, active/inactive toggle, delete, empty state, and loading skeleton.
 - `/dashboard/[businessId]/menu/products/new`: add product form.
 - `/dashboard/[businessId]/menu/products/[productId]/edit`: edit product form.
-- `/dashboard/[businessId]/menu/categories`: category management workspace.
+- `/dashboard/[businessId]/menu/categories`: selected-business category management workspace. It server-fetches categories through `menu-management.ts` and hydrates `CategoryTable` for add/edit modal, tag assignment, product counts, status badges, soft delete, and empty state.
 - `/dashboard/[businessId]/menu/categories/new`: add category form.
 - `/dashboard/[businessId]/menu/categories/[categoryId]/edit`: edit category form.
-- `/dashboard/[businessId]/menu/tags`: tag management workspace.
+- `/dashboard/[businessId]/menu/tags`: selected-business tag management workspace. It server-fetches tags through `menu-management.ts` and hydrates `TagsTable` for add/edit modal, product/category counts, status badges, soft delete, and empty state.
+- `/dashboard/[businessId]/settings`: selected-business settings workspace. It server-fetches business info and delivery-area settings, then hydrates `AdminSettingsForm` for editing comma-separated delivery areas with live badge preview.
 - Legacy standalone product/category route files were removed after moving menu functionality into the `/menu/...` structure.
 
 Existing API routes:
@@ -65,11 +66,18 @@ Existing API routes:
 - `/api/auth/forgot-password`: forgot-password handler.
 - `/api/auth/reset-password`: reset-password handler.
 - `/api/upload`: authenticated image upload route.
-- `/api/products`: product CRUD route with business-owner authorization.
-- `/api/categories`: category CRUD route with business-owner authorization.
-- `/api/tags`: tag CRUD route with business-owner authorization.
+- `/api/products`: legacy product CRUD route with business-owner authorization. Current selected-business menu UI should prefer the dashboard-scoped product routes below.
+- `/api/categories`: legacy category CRUD route with business-owner authorization. Current selected-business menu UI should prefer the dashboard-scoped category routes below.
+- `/api/tags`: legacy tag CRUD route with business-owner authorization. Current selected-business menu UI should prefer the dashboard-scoped tag routes below.
+- `/api/dashboard/[businessId]/products`: authenticated selected-business Product list/create route. Supports search, category, status, page, and pageSize filters. Returns paginated product rows with tag/category shaping.
+- `/api/dashboard/[businessId]/products/[id]`: authenticated selected-business Product update/delete route. `PATCH` updates full product data or status-only payloads; `DELETE` soft-deletes by status.
+- `/api/dashboard/[businessId]/categories`: authenticated selected-business Category list/create route. Returns category rows with tags and inferred product counts.
+- `/api/dashboard/[businessId]/categories/[id]`: authenticated selected-business Category update/delete route. Maintains `business_product_category_2_tag` assignments and soft-deletes by status.
+- `/api/dashboard/[businessId]/tags`: authenticated selected-business Tag list/create route. Returns tag rows with product/category counts.
+- `/api/dashboard/[businessId]/tags/[id]`: authenticated selected-business Tag update/delete route. `DELETE` soft-deletes the tag and removes bridge-table assignments.
 - `/api/dashboard/[businessId]/orders`: authenticated selected-business Orders list route. Supports status, date range, search, and page filters and returns KPI data plus paginated order rows.
 - `/api/dashboard/[businessId]/orders/[orderId]/status`: authenticated selected-business order status update route. Accepts `{ status: "preparing" | "ready" | "delivered" | "rejected" }` and validates forward-only transitions.
+- `/api/dashboard/[businessId]/settings`: authenticated selected-business settings route. `GET` returns delivery-area settings; `POST` upserts normalized delivery areas.
 
 Planned or visible-coming-soon areas:
 
@@ -92,16 +100,20 @@ Data and API patterns:
 - Import Prisma from `@/lib/prisma`.
 - Prefer server components and server-side data fetching for dashboard/admin pages where possible.
 - `src/services/admin-data.ts` contains selected-business ownership checks, root business selector data, dashboard KPI/recent-order data, product catalog data, and product server actions with `revalidatePath`.
+- `src/services/menu-management.ts` contains dashboard-scoped Product, Category, and Tag list/create/update/delete behavior shared by the menu API routes and server pages.
 - `src/services/orders-management.ts` centralizes Orders management logic, including business-owner authorization, status mapping, list filtering, KPI calculation, order detail rows, and status transition validation.
+- `src/services/settings-management.ts` centralizes business info and delivery-area settings reads/upserts.
 - Route handlers return `NextResponse.json(...)`.
 - API routes validate required fields and return `{ error: string }` with appropriate status codes.
 - Authenticated API routes call `getServerSession(authOptions)`.
 - Business-scoped mutations verify that the current visitor account maps to a business owner and that the owner has access to the target business.
 - Multi-table writes and association updates use `prisma.$transaction`.
 - Product and category tag associations are updated transactionally.
+- Categories are related to tags through `business_product_category_2_tag`; products are related to tags through `business_product_2_tag`.
+- Product/category/tag deletes in the dashboard-scoped menu APIs are soft deletes through status values. Current menu queries exclude status `-1`; active/inactive use status `1`/`0`.
 - Image replacement/deletion paths clean up old S3 objects through `S3Storage`.
 - Client forms call API routes with `fetch`, JSON bodies, and local loading/error state.
-- Newer product catalog interactions in `AdminProductsTable` use server actions from `admin-data.ts` for save, toggle status, and delete; older product/category/tag components may still use API routes.
+- Product catalog interactions in `AdminProductsTable` use server actions from `admin-data.ts` for save, toggle status, and soft delete. Category and tag tables use the dashboard-scoped menu API routes.
 - Orders management uses API routes from the `AdminOrdersPage` client island because it needs filter/search pagination and modal-driven status updates.
 - Current order status mapping is `rejected = 0`, `new = 1`, `preparing = 2`, `ready = 3`, and `delivered = 4`. Valid forward transitions are `new -> preparing`, `new -> rejected`, `preparing -> ready`, and `ready -> delivered`.
 
@@ -158,12 +170,17 @@ Product-management components:
 
 - `AdminProductsTable` is the current Shopify-style product catalog UI for `/dashboard/[businessId]/menu/products`. It receives server-fetched rows and category options, then handles search, category filter, sorting, add/edit modal, status toggle, and delete as a client island.
 - Product category display/filtering in `AdminProductsTable` is inferred from overlapping product tags and category tags because `business_product` does not have a direct category foreign key.
-- `ProductTable`, `CategoryTable`, and `TagsTable` are older product-management components and may still be useful for legacy category/tag workflows.
+- `CategoryTable` and `TagsTable` are current selected-business client islands for category/tag management and expect server-provided rows from `menu-management.ts`.
+- `ProductTable`, `DeleteProductModal`, and the legacy root `/api/products` flows remain older product-management surfaces; prefer `AdminProductsTable` and dashboard-scoped APIs for current selected-business work.
 - `ProductForm` and `CategoryForm` are reusable add/edit forms controlled by a `mode` prop and `initialValues`.
-- `TagSelect` is used by forms to attach tags.
+- `ProductForm` can receive `categoryOptions`; category assignment is implemented by adding the selected category's tags to the product's tag assignments.
+- `TagSelect` is used by product/category forms to attach tags and loads tags from `/api/dashboard/[businessId]/tags`.
 - `TagFilter` filters product lists by selected tags.
-- `DeleteProductModal` handles product deletion confirmation.
 - Add/edit pages are thin wrappers around the reusable forms and API calls.
+
+Settings components:
+
+- `AdminSettingsForm` is the selected-business settings client island. It edits comma-separated delivery areas, shows a live badge preview, saves through `/api/dashboard/[businessId]/settings`, and renders read-only business name/email fields.
 
 Orders-management components:
 
@@ -181,6 +198,8 @@ Orders-management components:
 - Preserve existing Foodeez styling tokens and component library usage.
 - For selected-business admin chrome changes, prefer extending `src/components/admin` and keep `src/app/dashboard/[businessId]/layout.tsx` as a thin wrapper around `AdminShell`.
 - For root dashboard, selected-business dashboard, and selected-business Menu/product catalog changes, prefer extending `src/services/admin-data.ts` and the relevant server page before adding client-side fetching.
+- For selected-business Product/Category/Tag API behavior, prefer extending `src/services/menu-management.ts` so ownership, soft delete behavior, tag/category relationship shaping, and counts stay consistent.
+- For selected-business Settings behavior, prefer extending `src/services/settings-management.ts` and `AdminSettingsForm`.
 - For Orders management changes, prefer extending `src/services/orders-management.ts` so the page UI and API routes share the same status mapping, filtering, authorization, and transition rules.
 - When adding product category behavior, remember that categories are not directly linked from `business_product`; check `prisma/schema.prisma` and the current tag-inference approach before changing assumptions.
 - For media changes, use the existing upload utilities and S3 storage helpers.
