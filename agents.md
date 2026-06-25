@@ -25,11 +25,12 @@ Important folders:
 - `src/components/admin`: Shopify-inspired selected-business admin shell, sidebar, mobile drawer, and header.
 - `src/components/core`: shared app chrome such as navbars, footers, breadcrumb, profile, loading.
 - `src/components/dashboard`: selected-business dashboard cards.
+- `src/components/menu`: selected-business Menu Cards management client UI.
 - `src/components/orders`: selected-business Orders management client UI.
 - `src/components/products`: product, category, tag tables/forms/actions.
 - `src/components/providers`: app-wide React providers for auth and selected business context.
 - `src/lib`: Prisma, auth, media, upload, S3, and utility helpers.
-- `src/services`: server helpers for dashboard/business/menu/order/settings data. `src/services/admin-data.ts` owns root dashboard data, selected-business dashboard data, and the current products server actions. `src/services/menu-management.ts` owns the dashboard-scoped Product, Category, and Tag API logic, including ownership checks, relationship shaping, counts, filtering, pagination, and soft deletes. `src/services/orders-management.ts` owns Orders management filtering, KPI aggregation, detail shaping, ownership checks, and status transitions. `src/services/settings-management.ts` owns business settings reads/upserts.
+- `src/services`: server helpers for dashboard/business/menu/order/settings data. `src/services/admin-data.ts` owns root dashboard data, selected-business dashboard data, and the current products server actions. `src/services/menu-management.ts` owns the dashboard-scoped Menu Card, Product, Category, and Tag API logic, including ownership checks, relationship shaping, counts, filtering, pagination, ordering, preview shaping, and soft deletes where applicable. `src/services/orders-management.ts` owns Orders management filtering, KPI aggregation, detail shaping, ownership checks, and status transitions. `src/services/settings-management.ts` owns business settings reads/upserts.
 - `prisma`: Prisma schema, generated Prisma client output, and SQL view files.
 - `public`: logos, SVGs, and static images.
 
@@ -49,7 +50,8 @@ Existing pages:
 - `/dashboard/[businessId]`: selected-business overview page inside `AdminShell`. It is server-rendered and shows KPI cards for total orders, total revenue, pending orders, and active products, followed by a recent-orders table.
 - `/dashboard/[businessId]` and nested selected-business routes are wrapped by `src/app/dashboard/[businessId]/layout.tsx`, which now renders the shared admin shell instead of the older public navbar/footer chrome.
 - `/dashboard/[businessId]/orders`: selected-business Orders management page. It renders KPI cards, status/date/search filters, a paginated orders table, row actions, and an order detail modal through `AdminOrdersPage`.
-- `/dashboard/[businessId]/menu`: selected-business Menu hub / menu cards landing page.
+- `/dashboard/[businessId]/menu`: selected-business Menu Cards management page. It server-fetches menu cards through `menu-management.ts` and hydrates `MenuCardsManagement` for status tabs, 3-column desktop card grid, create/edit modal, duplicate, delete, and Manage links.
+- `/dashboard/[businessId]/menu/[cardId]`: selected-business Menu Card detail workspace. It server-fetches the menu card workspace through `menu-management.ts` and hydrates `MenuCardDetailManagement` for draft category assignment, drag reorder, remove, explicit Save/Discard, expandable product preview, and customer preview modal.
 - `/dashboard/[businessId]/menu/products`: selected-business product catalog workspace. It server-fetches products/categories and hydrates `AdminProductsTable` for search, category filtering, sortable table columns, add/edit modal, active/inactive toggle, delete, empty state, and loading skeleton.
 - `/dashboard/[businessId]/menu/products/new`: add product form.
 - `/dashboard/[businessId]/menu/products/[productId]/edit`: edit product form.
@@ -75,6 +77,11 @@ Existing API routes:
 - `/api/dashboard/[businessId]/categories/[id]`: authenticated selected-business Category update/delete route. Maintains `business_product_category_2_tag` assignments and soft-deletes by status.
 - `/api/dashboard/[businessId]/tags`: authenticated selected-business Tag list/create route. Returns tag rows with product/category counts.
 - `/api/dashboard/[businessId]/tags/[id]`: authenticated selected-business Tag update/delete route. `DELETE` soft-deletes the tag and removes bridge-table assignments.
+- `/api/dashboard/[businessId]/menu-cards`: authenticated selected-business Menu Card list/create route. `GET` returns all non-deleted cards with category count, product count, status, computed availability, and date range. `POST` creates a card or duplicates an existing card when given `duplicateFromId`.
+- `/api/dashboard/[businessId]/menu-cards/[cardId]`: authenticated selected-business Menu Card update/delete route. `PATCH` updates title, date range, and enabled status. `DELETE` removes the card and its bridge detail rows.
+- `/api/dashboard/[businessId]/menu-cards/[cardId]/details`: authenticated selected-business Menu Card detail list/create route. `GET` returns assigned categories, available categories, and read-only products from the menu-card detail view. `POST` assigns a category to the card.
+- `/api/dashboard/[businessId]/menu-cards/[cardId]/details/[detailId]`: authenticated selected-business Menu Card detail delete route. `DELETE` removes a category assignment from the card.
+- `/api/dashboard/[businessId]/menu-cards/[cardId]/details/reorder`: authenticated selected-business Menu Card detail reorder route. `PATCH` accepts `[ { detailId, displayOrder } ]`.
 - `/api/dashboard/[businessId]/orders`: authenticated selected-business Orders list route. Supports status, date range, search, and page filters and returns KPI data plus paginated order rows.
 - `/api/dashboard/[businessId]/orders/[orderId]/status`: authenticated selected-business order status update route. Accepts `{ status: "preparing" | "ready" | "delivered" | "rejected" }` and validates forward-only transitions.
 - `/api/dashboard/[businessId]/settings`: authenticated selected-business settings route. `GET` returns delivery-area settings; `POST` upserts normalized delivery areas.
@@ -100,7 +107,7 @@ Data and API patterns:
 - Import Prisma from `@/lib/prisma`.
 - Prefer server components and server-side data fetching for dashboard/admin pages where possible.
 - `src/services/admin-data.ts` contains selected-business ownership checks, root business selector data, dashboard KPI/recent-order data, product catalog data, and product server actions with `revalidatePath`.
-- `src/services/menu-management.ts` contains dashboard-scoped Product, Category, and Tag list/create/update/delete behavior shared by the menu API routes and server pages.
+- `src/services/menu-management.ts` contains dashboard-scoped Menu Card, Product, Category, and Tag list/create/update/delete behavior shared by the menu API routes and server pages.
 - `src/services/orders-management.ts` centralizes Orders management logic, including business-owner authorization, status mapping, list filtering, KPI calculation, order detail rows, and status transition validation.
 - `src/services/settings-management.ts` centralizes business info and delivery-area settings reads/upserts.
 - Route handlers return `NextResponse.json(...)`.
@@ -111,6 +118,10 @@ Data and API patterns:
 - Product and category tag associations are updated transactionally.
 - Categories are related to tags through `business_product_category_2_tag`; products are related to tags through `business_product_2_tag`.
 - Product/category/tag deletes in the dashboard-scoped menu APIs are soft deletes through status values. Current menu queries exclude status `-1`; active/inactive use status `1`/`0`.
+- Menu Card status is separate from date availability. `STATUS = 1` means enabled, `STATUS = 0` means disabled, and date range determines Active/Scheduled/Expired availability. Do not show both Active and Inactive badges for the same card; disabled cards should show only Inactive in the admin list.
+- Multiple menu cards can be active for the same business and overlapping date ranges are valid. Do not add uniqueness constraints across `BUSINESS_ID`, `VALID_FROM`, or `VALID_TO`.
+- Menu Card category changes in `MenuCardDetailManagement` are draft-first. Add, remove, and drag reorder update local UI only until the owner clicks Save Changes; Discard reloads the saved workspace.
+- Menu Card preview products come from `business_food_menu_card_detail_view` and are read-only. Customer-facing menu-card views should filter to enabled cards (`STATUS = 1`) and enabled detail rows.
 - Image replacement/deletion paths clean up old S3 objects through `S3Storage`.
 - Client forms call API routes with `fetch`, JSON bodies, and local loading/error state.
 - Product catalog interactions in `AdminProductsTable` use server actions from `admin-data.ts` for save, toggle status, and soft delete. Category and tag tables use the dashboard-scoped menu API routes.
@@ -166,6 +177,12 @@ Dashboard components:
 - `StatsCard` renders linked dashboard metric cards.
 - The selected-business dashboard page now renders KPI cards and recent orders directly as a server component rather than using client-side dashboard data loading.
 
+Menu-card-management components:
+
+- `MenuCardsManagement` is the current selected-business menu-card list UI for `/dashboard/[businessId]/menu`. It owns client-side status tab filtering, create/edit modal state, duplicate/delete actions, and renders one badge per card: Inactive for disabled cards, otherwise Active/Scheduled/Expired from date availability.
+- `MenuCardDetailManagement` is the selected-business menu-card detail client island for `/dashboard/[businessId]/menu/[cardId]`. It owns local draft state for available categories, assigned categories, removals, drag order, Save Changes, Discard, expanded category rows, and the customer preview modal.
+- Menu cards contain categories through `business_food_menu_card_detail`; categories contain products indirectly through the existing category-tag and product-tag inference. Do not add a direct product assignment table for menu cards.
+
 Product-management components:
 
 - `AdminProductsTable` is the current Shopify-style product catalog UI for `/dashboard/[businessId]/menu/products`. It receives server-fetched rows and category options, then handles search, category filter, sorting, add/edit modal, status toggle, and delete as a client island.
@@ -198,7 +215,9 @@ Orders-management components:
 - Preserve existing Foodeez styling tokens and component library usage.
 - For selected-business admin chrome changes, prefer extending `src/components/admin` and keep `src/app/dashboard/[businessId]/layout.tsx` as a thin wrapper around `AdminShell`.
 - For root dashboard, selected-business dashboard, and selected-business Menu/product catalog changes, prefer extending `src/services/admin-data.ts` and the relevant server page before adding client-side fetching.
-- For selected-business Product/Category/Tag API behavior, prefer extending `src/services/menu-management.ts` so ownership, soft delete behavior, tag/category relationship shaping, and counts stay consistent.
+- For selected-business Menu Card/Product/Category/Tag API behavior, prefer extending `src/services/menu-management.ts` so ownership, soft delete behavior, tag/category relationship shaping, counts, ordering, and preview behavior stay consistent.
+- For Menu Card detail changes, preserve the explicit Save Changes workflow. Do not make Add, Remove, or drag reorder immediately persist unless the UX is intentionally changed everywhere.
+- For Menu Card customer visibility, keep admin status and view SQL in sync. Disabled menu cards should not appear through `business_food_menu_card_view`, `business_food_menu_card_detail_view`, or `business_having_active_menu_card_view`.
 - For selected-business Settings behavior, prefer extending `src/services/settings-management.ts` and `AdminSettingsForm`.
 - For Orders management changes, prefer extending `src/services/orders-management.ts` so the page UI and API routes share the same status mapping, filtering, authorization, and transition rules.
 - When adding product category behavior, remember that categories are not directly linked from `business_product`; check `prisma/schema.prisma` and the current tag-inference approach before changing assumptions.

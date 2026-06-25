@@ -27,6 +27,7 @@ FROM
         (`x`.`BUSINESS_ID` = `y`.`BUSINESS_ID`)
         AND (`y`.`VALID_FROM` <= NOW())
         AND (0 <> IFNULL(`y`.`VALID_TO`,(NOW() >= NOW())))
+        AND (IFNULL(`y`.`STATUS`, 1) = 1)
       )
     )
   )

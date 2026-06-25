@@ -53,6 +53,50 @@ export type PaginatedMenuProducts = {
   };
 };
 
+export type MenuCardRecordStatus = "active" | "inactive";
+export type MenuCardAvailability = "active" | "scheduled" | "expired";
+
+export type MenuCardRow = {
+  id: number;
+  title: string;
+  validFrom: string | null;
+  validTo: string | null;
+  status: MenuCardRecordStatus;
+  availability: MenuCardAvailability;
+  categoryCount: number;
+  productCount: number;
+};
+
+export type MenuCardAvailableCategory = {
+  id: number;
+  title: string;
+  productCount: number;
+};
+
+export type MenuCardPreviewProduct = {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  pic: string | null;
+  status: EntityStatus;
+};
+
+export type MenuCardDetailRow = {
+  id: number;
+  categoryId: number;
+  categoryTitle: string;
+  productCount: number;
+  displayOrder: number;
+  products: MenuCardPreviewProduct[];
+};
+
+export type MenuCardWorkspace = {
+  card: MenuCardRow;
+  availableCategories: MenuCardAvailableCategory[];
+  details: MenuCardDetailRow[];
+};
+
 const DELETED_STATUS = -1;
 
 function toNumber(value: unknown) {
@@ -67,10 +111,99 @@ function mapStatus(status?: number | null): EntityStatus {
   return status === 1 ? "active" : "inactive";
 }
 
+function mapMenuCardStatus(status?: number | null): MenuCardRecordStatus {
+  return status === 0 ? "inactive" : "active";
+}
+
 function statusCode(status?: string | null) {
   if (status === "active") return 1;
   if (status === "inactive") return 0;
   return null;
+}
+
+function padDatePart(value: number) {
+  return value.toString().padStart(2, "0");
+}
+
+function toDateValue(value?: Date | null) {
+  if (!value) return null;
+
+  return [
+    value.getFullYear(),
+    padDatePart(value.getMonth() + 1),
+    padDatePart(value.getDate()),
+  ].join("-");
+}
+
+function parseDateInput(value: unknown, fieldName: string, endOfDay = false) {
+  const text = String(value || "").trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+
+  if (!match) {
+    throw new Error(`${fieldName} is required.`);
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(
+    year,
+    month - 1,
+    day,
+    endOfDay ? 23 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 59 : 0
+  );
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    throw new Error(`${fieldName} must be a valid date.`);
+  }
+
+  return date;
+}
+
+function computeMenuCardAvailability(
+  validFrom: string | null,
+  validTo: string | null
+): MenuCardAvailability {
+  const today = toDateValue(new Date()) || "";
+
+  if (validFrom && validFrom > today) return "scheduled";
+  if (validTo && validTo < today) return "expired";
+
+  return "active";
+}
+
+function normalizeMenuCardValues(values: {
+  title?: unknown;
+  validFrom?: unknown;
+  validTo?: unknown;
+  status?: unknown;
+}) {
+  const title = String(values.title || "").trim();
+
+  if (!title) throw new Error("Menu title is required.");
+  if (title.length > 45) {
+    throw new Error("Menu title must be at most 45 characters.");
+  }
+
+  const validFrom = parseDateInput(values.validFrom, "Valid from");
+  const validTo = parseDateInput(values.validTo, "Valid to", true);
+
+  if (validFrom.getTime() > validTo.getTime()) {
+    throw new Error("Valid from must be before valid to.");
+  }
+
+  return {
+    title,
+    validFrom,
+    validTo,
+    status: statusCode(String(values.status || "active")) ?? 1,
+  };
 }
 
 function uniqueIds(values: unknown) {
@@ -218,6 +351,50 @@ async function getOwnedTag(businessId: number, tagId: number) {
   }
 
   return tag;
+}
+
+type RawMenuCard = {
+  BUSINESS_FOOD_MENU_CARD_ID: number;
+  TITLE: string | null;
+  VALID_FROM: Date | null;
+  VALID_TO: Date | null;
+  STATUS: number | null;
+};
+
+async function getOwnedMenuCard(businessId: number, cardId: number) {
+  const card = await prisma.business_food_menu_card.findFirst({
+    where: {
+      BUSINESS_FOOD_MENU_CARD_ID: cardId,
+      BUSINESS_ID: businessId,
+      STATUS: { not: DELETED_STATUS },
+    },
+  });
+
+  if (!card) {
+    throw new Error("Menu card not found.");
+  }
+
+  return card;
+}
+
+function mapMenuCardRow(
+  card: RawMenuCard,
+  categoryCount = 0,
+  productCount = 0
+): MenuCardRow {
+  const validFrom = toDateValue(card.VALID_FROM);
+  const validTo = toDateValue(card.VALID_TO);
+
+  return {
+    id: card.BUSINESS_FOOD_MENU_CARD_ID,
+    title: card.TITLE || `Menu #${card.BUSINESS_FOOD_MENU_CARD_ID}`,
+    validFrom,
+    validTo,
+    status: mapMenuCardStatus(card.STATUS),
+    availability: computeMenuCardAvailability(validFrom, validTo),
+    categoryCount,
+    productCount,
+  };
 }
 
 export async function listMenuTags(businessId: number): Promise<MenuTagRow[]> {
@@ -785,4 +962,551 @@ export async function deleteMenuProduct(businessId: number, productId: number) {
     where: { BUSINESS_PRODUCT_ID: productId },
     data: { STATUS: DELETED_STATUS },
   });
+}
+
+async function getBusinessCategoryProductIdMap(businessId: number) {
+  const [categories, products, categoryLinks, productLinks] = await Promise.all([
+    prisma.business_product_category.findMany({
+      where: {
+        BUSINESS_ID: businessId,
+        STATUS: { not: DELETED_STATUS },
+      },
+      select: { BUSINESS_PRODUCT_CATEGORY_ID: true },
+    }),
+    prisma.business_product.findMany({
+      where: {
+        BUSINESS_ID: businessId,
+        STATUS: { not: DELETED_STATUS },
+      },
+      select: { BUSINESS_PRODUCT_ID: true },
+    }),
+    prisma.business_product_category_2_tag.findMany(),
+    prisma.business_product_2_tag.findMany(),
+  ]);
+  const productIds = new Set(
+    products.map((product) => product.BUSINESS_PRODUCT_ID)
+  );
+  const productIdsByTag = new Map<number, Set<number>>();
+
+  for (const link of productLinks) {
+    if (
+      link.BUSINESS_PRODUCT_ID === null ||
+      link.BUSINESS_PRODUCT_TAG_ID === null ||
+      !productIds.has(link.BUSINESS_PRODUCT_ID)
+    ) {
+      continue;
+    }
+
+    const current = productIdsByTag.get(link.BUSINESS_PRODUCT_TAG_ID) || new Set();
+    current.add(link.BUSINESS_PRODUCT_ID);
+    productIdsByTag.set(link.BUSINESS_PRODUCT_TAG_ID, current);
+  }
+
+  const productIdsByCategory = new Map<number, Set<number>>();
+  for (const category of categories) {
+    productIdsByCategory.set(category.BUSINESS_PRODUCT_CATEGORY_ID, new Set());
+  }
+
+  for (const link of categoryLinks) {
+    if (
+      link.BUSINESS_PRODUCT_CATEGORY_ID === null ||
+      link.BUSINESS_PRODUCT_TAG_ID === null ||
+      !productIdsByCategory.has(link.BUSINESS_PRODUCT_CATEGORY_ID)
+    ) {
+      continue;
+    }
+
+    const categoryProductIds = productIdsByCategory.get(
+      link.BUSINESS_PRODUCT_CATEGORY_ID
+    );
+    const tagProductIds = productIdsByTag.get(link.BUSINESS_PRODUCT_TAG_ID);
+
+    if (!categoryProductIds || !tagProductIds) continue;
+
+    for (const productId of tagProductIds) {
+      categoryProductIds.add(productId);
+    }
+  }
+
+  return productIdsByCategory;
+}
+
+async function getMenuCategorySummaries(
+  businessId: number
+): Promise<MenuCardAvailableCategory[]> {
+  const [categories, productIdsByCategory] = await Promise.all([
+    prisma.business_product_category.findMany({
+      where: {
+        BUSINESS_ID: businessId,
+        STATUS: { not: DELETED_STATUS },
+      },
+      orderBy: { TITLE: "asc" },
+    }),
+    getBusinessCategoryProductIdMap(businessId),
+  ]);
+
+  return categories.map((category) => ({
+    id: category.BUSINESS_PRODUCT_CATEGORY_ID,
+    title:
+      category.TITLE || `Category #${category.BUSINESS_PRODUCT_CATEGORY_ID}`,
+    productCount:
+      productIdsByCategory.get(category.BUSINESS_PRODUCT_CATEGORY_ID)?.size || 0,
+  }));
+}
+
+async function getActiveMenuCardDetails(cardId: number) {
+  return prisma.business_food_menu_card_detail.findMany({
+    where: {
+      BUSINESS_FOOD_MENU_CARD_ID: cardId,
+      STATUS: { not: DELETED_STATUS },
+    },
+    orderBy: [
+      { DISPLAY_ORDER: "asc" },
+      { BUSINESS_FOOD_MENU_CARD_DETAIL_ID: "asc" },
+    ],
+  });
+}
+
+async function getMenuCardPreviewProducts(
+  businessId: number,
+  cardId: number
+) {
+  const rows = await prisma.business_food_menu_card_detail_view.findMany({
+    where: {
+      BUSINESS_ID: businessId,
+      BUSINESS_FOOD_MENU_CARD_ID: cardId,
+    },
+    orderBy: [{ BUSINESS_PRODUCT_CATEGORY_ID: "asc" }, { PRODUCT_NAME: "asc" }],
+  });
+  const productsByCategory = new Map<number, MenuCardPreviewProduct[]>();
+  const seenProductKeys = new Set<string>();
+
+  for (const row of rows) {
+    if (row.BUSINESS_PRODUCT_CATEGORY_ID === null) continue;
+
+    const productKey = `${row.BUSINESS_PRODUCT_CATEGORY_ID}:${row.BUSINESS_PRODUCT_ID}`;
+    if (seenProductKeys.has(productKey)) continue;
+    seenProductKeys.add(productKey);
+
+    const products =
+      productsByCategory.get(row.BUSINESS_PRODUCT_CATEGORY_ID) || [];
+    products.push({
+      id: row.BUSINESS_PRODUCT_ID,
+      name: row.PRODUCT_NAME,
+      description: row.PRODUCT_DESCRIPTION || "",
+      price: toNumber(row.PRODUCT_PRICE),
+      pic: row.PIC || null,
+      status: "active",
+    });
+    productsByCategory.set(row.BUSINESS_PRODUCT_CATEGORY_ID, products);
+  }
+
+  return productsByCategory;
+}
+
+async function buildMenuCardDetailRows(
+  businessId: number,
+  cardId: number,
+  details: Awaited<ReturnType<typeof getActiveMenuCardDetails>>
+): Promise<MenuCardDetailRow[]> {
+  const categoryIds = Array.from(
+    new Set(
+      details
+        .map((detail) => detail.BUSINESS_PRODUCT_CATEGORY_ID)
+        .filter((id): id is number => id !== null)
+    )
+  );
+
+  if (!categoryIds.length) return [];
+
+  const [categories, productIdsByCategory, previewProductsByCategory] =
+    await Promise.all([
+      prisma.business_product_category.findMany({
+        where: {
+          BUSINESS_ID: businessId,
+          BUSINESS_PRODUCT_CATEGORY_ID: { in: categoryIds },
+          STATUS: { not: DELETED_STATUS },
+        },
+      }),
+      getBusinessCategoryProductIdMap(businessId),
+      getMenuCardPreviewProducts(businessId, cardId),
+    ]);
+  const categoryById = new Map(
+    categories.map((category) => [
+      category.BUSINESS_PRODUCT_CATEGORY_ID,
+      category,
+    ])
+  );
+
+  return details
+    .map((detail) => {
+      const categoryId = detail.BUSINESS_PRODUCT_CATEGORY_ID;
+      const category = categoryId ? categoryById.get(categoryId) : null;
+
+      if (!categoryId || !category) return null;
+
+      return {
+        id: detail.BUSINESS_FOOD_MENU_CARD_DETAIL_ID,
+        categoryId,
+        categoryTitle:
+          category.TITLE || `Category #${category.BUSINESS_PRODUCT_CATEGORY_ID}`,
+        productCount: productIdsByCategory.get(categoryId)?.size || 0,
+        displayOrder: detail.DISPLAY_ORDER || 1,
+        products: previewProductsByCategory.get(categoryId) || [],
+      } satisfies MenuCardDetailRow;
+    })
+    .filter((detail): detail is MenuCardDetailRow => detail !== null);
+}
+
+export async function listMenuCards(
+  businessId: number
+): Promise<MenuCardRow[]> {
+  await requireMenuBusinessAccess(businessId);
+
+  const cards = await prisma.business_food_menu_card.findMany({
+    where: {
+      BUSINESS_ID: businessId,
+      STATUS: { not: DELETED_STATUS },
+    },
+    orderBy: { BUSINESS_FOOD_MENU_CARD_ID: "desc" },
+  });
+
+  if (!cards.length) return [];
+
+  const cardIds = cards.map((card) => card.BUSINESS_FOOD_MENU_CARD_ID);
+  const [details, productIdsByCategory] = await Promise.all([
+    prisma.business_food_menu_card_detail.findMany({
+      where: {
+        BUSINESS_FOOD_MENU_CARD_ID: { in: cardIds },
+        STATUS: { not: DELETED_STATUS },
+      },
+    }),
+    getBusinessCategoryProductIdMap(businessId),
+  ]);
+  const countsByCard = new Map<
+    number,
+    { categoryIds: Set<number>; productIds: Set<number> }
+  >();
+
+  for (const cardId of cardIds) {
+    countsByCard.set(cardId, {
+      categoryIds: new Set(),
+      productIds: new Set(),
+    });
+  }
+
+  for (const detail of details) {
+    const cardId = detail.BUSINESS_FOOD_MENU_CARD_ID;
+    const categoryId = detail.BUSINESS_PRODUCT_CATEGORY_ID;
+
+    if (cardId === null || categoryId === null) continue;
+
+    const counts = countsByCard.get(cardId);
+    if (!counts) continue;
+
+    counts.categoryIds.add(categoryId);
+    for (const productId of productIdsByCategory.get(categoryId) || []) {
+      counts.productIds.add(productId);
+    }
+  }
+
+  return cards.map((card) => {
+    const counts = countsByCard.get(card.BUSINESS_FOOD_MENU_CARD_ID);
+
+    return mapMenuCardRow(
+      card,
+      counts?.categoryIds.size || 0,
+      counts?.productIds.size || 0
+    );
+  });
+}
+
+async function getMenuCardRowWithCounts(businessId: number, cardId: number) {
+  const card = (await listMenuCards(businessId)).find((item) => item.id === cardId);
+
+  if (!card) {
+    throw new Error("Menu card not found.");
+  }
+
+  return card;
+}
+
+async function duplicateMenuCard(businessId: number, sourceCardId: number) {
+  const source = await getOwnedMenuCard(businessId, sourceCardId);
+  const sourceDetails = await getActiveMenuCardDetails(sourceCardId);
+  const title = `Copy of ${source.TITLE || `Menu #${sourceCardId}`}`.slice(0, 45);
+
+  const createdId = await prisma.$transaction(async (tx) => {
+    const created = await tx.business_food_menu_card.create({
+      data: {
+        CREATION_DATETIME: new Date(),
+        BUSINESS_ID: businessId,
+        TITLE: title,
+        VALID_FROM: source.VALID_FROM,
+        VALID_TO: source.VALID_TO,
+        STATUS: source.STATUS === 0 ? 0 : 1,
+      },
+    });
+
+    const detailData = sourceDetails
+      .filter((detail) => detail.BUSINESS_PRODUCT_CATEGORY_ID !== null)
+      .map((detail) => ({
+        BUSINESS_FOOD_MENU_CARD_ID: created.BUSINESS_FOOD_MENU_CARD_ID,
+        BUSINESS_PRODUCT_CATEGORY_ID: detail.BUSINESS_PRODUCT_CATEGORY_ID,
+        DISPLAY_ORDER: detail.DISPLAY_ORDER || 1,
+        STATUS: 1,
+      }));
+
+    if (detailData.length) {
+      await tx.business_food_menu_card_detail.createMany({
+        data: detailData,
+      });
+    }
+
+    return created.BUSINESS_FOOD_MENU_CARD_ID;
+  });
+
+  return getMenuCardRowWithCounts(businessId, createdId);
+}
+
+export async function createMenuCard(
+  businessId: number,
+  values: {
+    title?: unknown;
+    validFrom?: unknown;
+    validTo?: unknown;
+    status?: unknown;
+    duplicateFromId?: unknown;
+  }
+) {
+  await requireMenuBusinessAccess(businessId);
+
+  const duplicateFromId = Number(values.duplicateFromId);
+  if (Number.isInteger(duplicateFromId) && duplicateFromId > 0) {
+    return duplicateMenuCard(businessId, duplicateFromId);
+  }
+
+  const normalized = normalizeMenuCardValues(values);
+  const created = await prisma.business_food_menu_card.create({
+    data: {
+      CREATION_DATETIME: new Date(),
+      BUSINESS_ID: businessId,
+      TITLE: normalized.title,
+      VALID_FROM: normalized.validFrom,
+      VALID_TO: normalized.validTo,
+      STATUS: normalized.status,
+    },
+  });
+
+  return getMenuCardRowWithCounts(
+    businessId,
+    created.BUSINESS_FOOD_MENU_CARD_ID
+  );
+}
+
+export async function updateMenuCard(
+  businessId: number,
+  cardId: number,
+  values: {
+    title?: unknown;
+    validFrom?: unknown;
+    validTo?: unknown;
+    status?: unknown;
+  }
+) {
+  await requireMenuBusinessAccess(businessId);
+  await getOwnedMenuCard(businessId, cardId);
+
+  const normalized = normalizeMenuCardValues(values);
+
+  await prisma.business_food_menu_card.update({
+    where: { BUSINESS_FOOD_MENU_CARD_ID: cardId },
+    data: {
+      TITLE: normalized.title,
+      VALID_FROM: normalized.validFrom,
+      VALID_TO: normalized.validTo,
+      STATUS: normalized.status,
+    },
+  });
+
+  return getMenuCardRowWithCounts(businessId, cardId);
+}
+
+export async function deleteMenuCard(businessId: number, cardId: number) {
+  await requireMenuBusinessAccess(businessId);
+  await getOwnedMenuCard(businessId, cardId);
+
+  await prisma.$transaction([
+    prisma.business_food_menu_card_detail.deleteMany({
+      where: { BUSINESS_FOOD_MENU_CARD_ID: cardId },
+    }),
+    prisma.business_food_menu_card.delete({
+      where: { BUSINESS_FOOD_MENU_CARD_ID: cardId },
+    }),
+  ]);
+}
+
+export async function getMenuCardWorkspace(
+  businessId: number,
+  cardId: number
+): Promise<MenuCardWorkspace> {
+  await requireMenuBusinessAccess(businessId);
+  await getOwnedMenuCard(businessId, cardId);
+
+  const [card, details, allCategories] = await Promise.all([
+    getMenuCardRowWithCounts(businessId, cardId),
+    getActiveMenuCardDetails(cardId),
+    getMenuCategorySummaries(businessId),
+  ]);
+  const detailRows = await buildMenuCardDetailRows(businessId, cardId, details);
+  const assignedCategoryIds = new Set(
+    detailRows.map((detail) => detail.categoryId)
+  );
+
+  return {
+    card,
+    details: detailRows,
+    availableCategories: allCategories.filter(
+      (category) => !assignedCategoryIds.has(category.id)
+    ),
+  };
+}
+
+export async function addMenuCardDetail(
+  businessId: number,
+  cardId: number,
+  values: { categoryId?: unknown; displayOrder?: unknown }
+) {
+  await requireMenuBusinessAccess(businessId);
+  await getOwnedMenuCard(businessId, cardId);
+
+  const categoryId = Number(values.categoryId);
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+    throw new Error("Category is required.");
+  }
+
+  await getOwnedCategory(businessId, categoryId);
+
+  const existing = await prisma.business_food_menu_card_detail.findFirst({
+    where: {
+      BUSINESS_FOOD_MENU_CARD_ID: cardId,
+      BUSINESS_PRODUCT_CATEGORY_ID: categoryId,
+      STATUS: { not: DELETED_STATUS },
+    },
+  });
+
+  if (existing) {
+    throw new Error("Category is already assigned to this menu card.");
+  }
+
+  const currentMax = await prisma.business_food_menu_card_detail.aggregate({
+    where: {
+      BUSINESS_FOOD_MENU_CARD_ID: cardId,
+      STATUS: { not: DELETED_STATUS },
+    },
+    _max: { DISPLAY_ORDER: true },
+  });
+  const displayOrder = parsePositiveInt(
+    values.displayOrder,
+    (currentMax._max.DISPLAY_ORDER || 0) + 1
+  );
+  const detail = await prisma.business_food_menu_card_detail.create({
+    data: {
+      BUSINESS_FOOD_MENU_CARD_ID: cardId,
+      BUSINESS_PRODUCT_CATEGORY_ID: categoryId,
+      DISPLAY_ORDER: displayOrder,
+      STATUS: 1,
+    },
+  });
+  const rows = await buildMenuCardDetailRows(businessId, cardId, [detail]);
+
+  return rows[0];
+}
+
+export async function removeMenuCardDetail(
+  businessId: number,
+  cardId: number,
+  detailId: number
+) {
+  await requireMenuBusinessAccess(businessId);
+  await getOwnedMenuCard(businessId, cardId);
+
+  const detail = await prisma.business_food_menu_card_detail.findFirst({
+    where: {
+      BUSINESS_FOOD_MENU_CARD_DETAIL_ID: detailId,
+      BUSINESS_FOOD_MENU_CARD_ID: cardId,
+      STATUS: { not: DELETED_STATUS },
+    },
+  });
+
+  if (!detail) {
+    throw new Error("Menu card category not found.");
+  }
+
+  await prisma.business_food_menu_card_detail.delete({
+    where: { BUSINESS_FOOD_MENU_CARD_DETAIL_ID: detailId },
+  });
+}
+
+export async function reorderMenuCardDetails(
+  businessId: number,
+  cardId: number,
+  values: unknown
+) {
+  await requireMenuBusinessAccess(businessId);
+  await getOwnedMenuCard(businessId, cardId);
+
+  if (!Array.isArray(values)) {
+    throw new Error("Reorder payload must be a list.");
+  }
+
+  const updates = values.map((item) => ({
+    detailId: Number((item as { detailId?: unknown }).detailId),
+    displayOrder: Number((item as { displayOrder?: unknown }).displayOrder),
+  }));
+  const uniqueDetailIds = new Set(updates.map((item) => item.detailId));
+
+  if (
+    !updates.length ||
+    uniqueDetailIds.size !== updates.length ||
+    updates.some(
+      (item) =>
+        !Number.isInteger(item.detailId) ||
+        item.detailId <= 0 ||
+        !Number.isInteger(item.displayOrder) ||
+        item.displayOrder <= 0
+    )
+  ) {
+    throw new Error("Reorder payload is invalid.");
+  }
+
+  const existing = await prisma.business_food_menu_card_detail.findMany({
+    where: {
+      BUSINESS_FOOD_MENU_CARD_ID: cardId,
+      BUSINESS_FOOD_MENU_CARD_DETAIL_ID: {
+        in: updates.map((item) => item.detailId),
+      },
+      STATUS: { not: DELETED_STATUS },
+    },
+    select: { BUSINESS_FOOD_MENU_CARD_DETAIL_ID: true },
+  });
+
+  if (existing.length !== updates.length) {
+    throw new Error("One or more menu card categories are invalid.");
+  }
+
+  await prisma.$transaction(
+    updates.map((item) =>
+      prisma.business_food_menu_card_detail.update({
+        where: { BUSINESS_FOOD_MENU_CARD_DETAIL_ID: item.detailId },
+        data: { DISPLAY_ORDER: item.displayOrder },
+      })
+    )
+  );
+
+  return buildMenuCardDetailRows(
+    businessId,
+    cardId,
+    await getActiveMenuCardDetails(cardId)
+  );
 }

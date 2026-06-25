@@ -248,6 +248,7 @@ model business_food_menu_card {
   TITLE                      String?   @db.VarChar(45)
   VALID_FROM                 DateTime? @db.DateTime(0)
   VALID_TO                   DateTime? @db.DateTime(0)
+  STATUS                     Int       @default(1) @db.TinyInt
 }
 
 model business_food_menu_card_detail {
