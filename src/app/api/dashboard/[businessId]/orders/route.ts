@@ -7,6 +7,10 @@ type OrdersRouteContext = {
 
 function errorResponse(error: unknown) {
   if (error instanceof Error) {
+    if (error.message === "Invalid businessId") {
+      return NextResponse.json({ error: "Invalid businessId" }, { status: 400 });
+    }
+
     if (error.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -25,9 +29,9 @@ function errorResponse(error: unknown) {
 
 export async function GET(req: Request, { params }: OrdersRouteContext) {
   const { businessId: businessIdParam } = await params;
-  const businessId = Number(businessIdParam);
+  const businessId = parseInt(businessIdParam, 10);
 
-  if (!Number.isFinite(businessId)) {
+  if (!Number.isInteger(businessId)) {
     return NextResponse.json({ error: "Invalid businessId" }, { status: 400 });
   }
 
@@ -37,11 +41,11 @@ export async function GET(req: Request, { params }: OrdersRouteContext) {
     const data = await listOrders({
       businessId,
       status: searchParams.get("status"),
-      dateRange: searchParams.get("dateRange") || "all", // FIXED: Orders table date filter mismatch
-      startDate: searchParams.get("startDate"),
-      endDate: searchParams.get("endDate"),
+      dateFrom: searchParams.get("dateFrom"),
+      dateTo: searchParams.get("dateTo"),
       search: searchParams.get("search"),
       page: Number(searchParams.get("page") || 1),
+      limit: Number(searchParams.get("limit") || 20),
     });
 
     return NextResponse.json(data);

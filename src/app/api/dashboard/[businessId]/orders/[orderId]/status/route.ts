@@ -32,8 +32,12 @@ function errorResponse(error: unknown) {
     if (error.message === "Invalid status transition") {
       return NextResponse.json(
         { error: "Invalid status transition" },
-        { status: 409 }
+        { status: 400 }
       );
+    }
+
+    if (error.message === "Invalid route params") {
+      return NextResponse.json({ error: "Invalid route params" }, { status: 400 });
     }
   }
 
@@ -49,10 +53,10 @@ export async function PATCH(
   { params }: OrderStatusRouteContext
 ) {
   const { businessId: businessIdParam, orderId: orderIdParam } = await params;
-  const businessId = Number(businessIdParam);
-  const orderId = Number(orderIdParam);
+  const businessId = parseInt(businessIdParam, 10);
+  const orderId = parseInt(orderIdParam, 10);
 
-  if (!Number.isFinite(businessId) || !Number.isFinite(orderId)) {
+  if (!Number.isInteger(businessId) || !Number.isInteger(orderId)) {
     return NextResponse.json({ error: "Invalid route params" }, { status: 400 });
   }
 

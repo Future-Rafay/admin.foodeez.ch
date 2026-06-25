@@ -51,32 +51,44 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   AdminOrderRow,
-  DateRangeFilter,
-  OrderStatus,
+  NormalizedOrderStatus,
   OrdersKpis,
 } from "@/services/orders-management";
 
 type OrdersResponse = {
-  kpis: OrdersKpis;
   orders: AdminOrderRow[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-  };
+  totalCount: number;
+  page: number;
+  totalPages: number;
+  kpi: OrdersKpis;
 };
 
-type StatusFilter = "all" | OrderStatus;
+type StatusFilter = "all" | NormalizedOrderStatus;
+type DateRangeFilter = "all" | "today" | "last7" | "custom";
+type OrderAction = {
+  label: string;
+  status: NormalizedOrderStatus;
+  variant?: "destructive";
+};
+
+const PAGE_SIZE = 20;
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "CHF",
 });
 
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 const statusOptions: { label: string; value: StatusFilter }[] = [
   { label: "All", value: "all" },
-  { label: "New", value: "new" },
+  { label: "New/Pending", value: "new" },
   { label: "Preparing", value: "preparing" },
   { label: "Ready", value: "ready" },
   { label: "Delivered", value: "delivered" },
@@ -84,14 +96,51 @@ const statusOptions: { label: string; value: StatusFilter }[] = [
 ];
 
 const dateRangeOptions: { label: string; value: DateRangeFilter }[] = [
-  { label: "All dates", value: "all" }, // FIXED: Orders table date filter mismatch
+  { label: "All dates", value: "all" },
   { label: "Today", value: "today" },
   { label: "Last 7 days", value: "last7" },
   { label: "Custom", value: "custom" },
 ];
 
-function statusLabel(status: OrderStatus) {
-  const labels: Record<OrderStatus, string> = {
+function todayInputValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatInputDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getDateRangeBounds(dateRange: DateRangeFilter) {
+  if (dateRange === "all" || dateRange === "custom") {
+    return { dateFrom: "", dateTo: "" };
+  }
+
+  const today = new Date();
+
+  if (dateRange === "today") {
+    return { dateFrom: formatInputDate(today), dateTo: formatInputDate(today) };
+  }
+
+  const start = new Date(today);
+  start.setDate(start.getDate() - 6);
+
+  return { dateFrom: formatInputDate(start), dateTo: formatInputDate(today) };
+}
+
+function customerName(order: AdminOrderRow) {
+  return [order.VISITOR_FIRST_NAME, order.VISITOR_LAST_NAME]
+    .filter(Boolean)
+    .join(" ")
+    .trim() || "Guest customer";
+}
+
+function itemsSummary(order: AdminOrderRow) {
+  return `${order.item_count} ${order.item_count === 1 ? "item" : "items"}`;
+}
+
+function statusLabel(status: NormalizedOrderStatus) {
+  const labels: Record<NormalizedOrderStatus, string> = {
+    pending: "Pending",
     new: "New",
     preparing: "Preparing",
     ready: "Ready",
@@ -102,9 +151,15 @@ function statusLabel(status: OrderStatus) {
   return labels[status];
 }
 
-function statusBadgeClass(status: OrderStatus) {
-  const classes: Record<OrderStatus, string> = {
-    new: "border-yellow-200 bg-yellow-50 text-yellow-800",
+function statusBadgeClass(status: NormalizedOrderStatus) {
+  if (status === "new" || status === "pending") {
+    return "border-yellow-200 bg-yellow-50 text-yellow-800";
+  }
+
+  const classes: Record<
+    Exclude<NormalizedOrderStatus, "new" | "pending">,
+    string
+  > = {
     preparing: "border-blue-200 bg-blue-50 text-blue-700",
     ready: "border-purple-200 bg-purple-50 text-purple-700",
     delivered: "border-green-200 bg-green-50 text-green-700",
@@ -114,35 +169,25 @@ function statusBadgeClass(status: OrderStatus) {
   return classes[status];
 }
 
-function formatOrderedAt(value: string | null) {
+function formatDateTime(value: string | null) {
   if (!value) return "Not available";
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return dateTimeFormatter.format(new Date(value));
 }
 
-function todayInputValue() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getOrderActions(status: OrderStatus) {
-  if (status === "new") {
+function getOrderActions(status: NormalizedOrderStatus): OrderAction[] {
+  if (status === "new" || status === "pending") {
     return [
-      { label: "Accept", status: "preparing" as OrderStatus },
-      { label: "Reject", status: "rejected" as OrderStatus },
+      { label: "Accept -> Preparing", status: "preparing" as const },
+      { label: "Reject", status: "rejected" as const, variant: "destructive" },
     ];
   }
 
   if (status === "preparing") {
-    return [{ label: "Mark Ready", status: "ready" as OrderStatus }];
+    return [{ label: "Mark Ready", status: "ready" as const }];
   }
 
   if (status === "ready") {
-    return [{ label: "Mark Delivered", status: "delivered" as OrderStatus }];
+    return [{ label: "Mark Delivered", status: "delivered" as const }];
   }
 
   return [];
@@ -150,17 +195,17 @@ function getOrderActions(status: OrderStatus) {
 
 export default function AdminOrdersPage({ businessId }: { businessId: number }) {
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
-  const [kpis, setKpis] = useState<OrdersKpis>({
-    newPendingCount: 0,
-    preparingCount: 0,
-    readyCount: 0,
-    deliveredTodayCount: 0,
-    revenueToday: 0,
+  const [kpi, setKpi] = useState<OrdersKpis>({
+    new: 0,
+    preparing: 0,
+    ready: 0,
+    delivered: 0,
+    revenue_today: 0,
   });
   const [status, setStatus] = useState<StatusFilter>("all");
-  const [dateRange, setDateRange] = useState<DateRangeFilter>("all"); // FIXED: Orders table date filter mismatch
-  const [startDate, setStartDate] = useState(todayInputValue);
-  const [endDate, setEndDate] = useState(todayInputValue);
+  const [dateRange, setDateRange] = useState<DateRangeFilter>("all");
+  const [dateFrom, setDateFrom] = useState(todayInputValue);
+  const [dateTo, setDateTo] = useState(todayInputValue);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -173,18 +218,19 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({
       status,
-      dateRange,
       search,
       page: page.toString(),
+      limit: PAGE_SIZE.toString(),
     });
+    const presetBounds = getDateRangeBounds(dateRange);
+    const rangeFrom = dateRange === "custom" ? dateFrom : presetBounds.dateFrom;
+    const rangeTo = dateRange === "custom" ? dateTo : presetBounds.dateTo;
 
-    if (dateRange === "custom") {
-      params.set("startDate", startDate);
-      params.set("endDate", endDate);
-    }
+    if (rangeFrom) params.set("dateFrom", rangeFrom);
+    if (rangeTo) params.set("dateTo", rangeTo);
 
     return params.toString();
-  }, [dateRange, endDate, page, search, startDate, status]);
+  }, [dateFrom, dateRange, dateTo, page, search, status]);
 
   const loadOrders = useCallback(
     async (signal?: AbortSignal) => {
@@ -204,9 +250,9 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
 
         const data = (await response.json()) as OrdersResponse;
         setOrders(data.orders);
-        setKpis(data.kpis);
-        setTotalPages(data.pagination.totalPages);
-        setTotalCount(data.pagination.totalCount);
+        setKpi(data.kpi);
+        setTotalPages(data.totalPages);
+        setTotalCount(data.totalCount);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setError(error instanceof Error ? error.message : "Failed to load orders");
@@ -225,15 +271,18 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
 
   useEffect(() => {
     setPage(1);
-  }, [dateRange, endDate, search, startDate, status]);
+  }, [dateFrom, dateRange, dateTo, search, status]);
 
-  async function updateStatus(order: AdminOrderRow, nextStatus: OrderStatus) {
+  async function updateStatus(
+    order: AdminOrderRow,
+    nextStatus: NormalizedOrderStatus
+  ) {
     setIsUpdating(true);
     setError("");
 
     try {
       const response = await fetch(
-        `/api/dashboard/${businessId}/orders/${order.id}/status`,
+        `/api/dashboard/${businessId}/orders/${order.BUSINESS_ORDER_ID}/status`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -248,7 +297,9 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
 
       const updatedOrder = (await response.json()) as AdminOrderRow;
       setSelectedOrder((current) =>
-        current?.id === updatedOrder.id ? updatedOrder : current
+        current?.BUSINESS_ORDER_ID === updatedOrder.BUSINESS_ORDER_ID
+          ? updatedOrder
+          : current
       );
       await loadOrders();
     } catch (error) {
@@ -263,31 +314,31 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
   const kpiCards = [
     {
       label: "New/Pending",
-      value: kpis.newPendingCount,
+      value: kpi.new,
       icon: Clock3,
       className: "bg-yellow-50 text-yellow-800",
     },
     {
       label: "Preparing",
-      value: kpis.preparingCount,
+      value: kpi.preparing,
       icon: PackageCheck,
       className: "bg-blue-50 text-blue-700",
     },
     {
       label: "Ready",
-      value: kpis.readyCount,
+      value: kpi.ready,
       icon: CheckCircle2,
       className: "bg-purple-50 text-purple-700",
     },
     {
-      label: "Delivered today",
-      value: kpis.deliveredTodayCount,
+      label: "Delivered",
+      value: kpi.delivered,
       icon: CheckCircle2,
       className: "bg-green-50 text-green-700",
     },
     {
       label: "Revenue today",
-      value: currencyFormatter.format(kpis.revenueToday),
+      value: currencyFormatter.format(kpi.revenue_today),
       icon: Wallet,
       className: "bg-green-50 text-green-700",
     },
@@ -367,7 +418,7 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by order number or customer name"
+                placeholder="Search by order number, customer, email, or phone"
                 className="h-10 bg-white pl-9"
               />
             </div>
@@ -377,13 +428,13 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:max-w-md">
               <Input
                 type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
+                value={dateFrom}
+                onChange={(event) => setDateFrom(event.target.value)}
               />
               <Input
                 type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
+                value={dateTo}
+                onChange={(event) => setDateTo(event.target.value)}
               />
             </div>
           )}
@@ -407,9 +458,10 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
                   <TableHeader>
                     <TableRow className="bg-gray-50 hover:bg-gray-50">
                       <TableHead>Order #</TableHead>
-                      <TableHead>Customer name</TableHead>
+                      <TableHead>Customer</TableHead>
                       <TableHead>Items summary</TableHead>
                       <TableHead>Total</TableHead>
+                      <TableHead>Payment</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Ordered at</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -417,22 +469,31 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
                   </TableHeader>
                   <TableBody>
                     {orders.map((order) => (
-                      <TableRow key={order.id} className="hover:bg-gray-50">
+                      <TableRow
+                        key={order.BUSINESS_ORDER_ID}
+                        className="hover:bg-gray-50"
+                      >
                         <TableCell className="font-medium text-gray-950">
-                          #{order.id}
-                        </TableCell>
-                        <TableCell>{order.customerName}</TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {order.itemsSummary}
+                          #{order.BUSINESS_ORDER_ID}
                         </TableCell>
                         <TableCell>
-                          {currencyFormatter.format(order.total)}
+                          <div className="font-medium text-gray-950">
+                            {customerName(order)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {order.VISITOR_PHONE || "No phone"}
+                          </div>
                         </TableCell>
+                        <TableCell>{itemsSummary(order)}</TableCell>
+                        <TableCell>
+                          {currencyFormatter.format(order.FINAL_AMOUNT)}
+                        </TableCell>
+                        <TableCell>{order.PAYMENT_MODE || "Not set"}</TableCell>
                         <TableCell>
                           <StatusBadge status={order.status} />
                         </TableCell>
                         <TableCell className="text-gray-500">
-                          {formatOrderedAt(order.orderedAt)}
+                          {formatDateTime(order.CREATION_DATETIME)}
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
@@ -442,11 +503,15 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
                                 <span className="sr-only">Order actions</span>
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuContent align="end" className="w-56">
                               {getOrderActions(order.status).map((action) => (
                                 <DropdownMenuItem
                                   key={action.status}
                                   disabled={isUpdating}
+                                  className={cn(
+                                    action.variant === "destructive" &&
+                                      "text-red-600 focus:text-red-700"
+                                  )}
                                   onClick={() => updateStatus(order, action.status)}
                                 >
                                   {action.label}
@@ -522,7 +587,7 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
   );
 }
 
-function StatusBadge({ status }: { status: OrderStatus }) {
+function StatusBadge({ status }: { status: NormalizedOrderStatus }) {
   return (
     <Badge variant="outline" className={cn("capitalize", statusBadgeClass(status))}>
       {statusLabel(status)}
@@ -533,20 +598,68 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 function OrdersSkeleton() {
   return (
     <div>
-      <div className="grid grid-cols-7 gap-4 border-b border-gray-100 bg-gray-50 p-4">
-        {Array.from({ length: 7 }).map((_, index) => (
+      <div className="grid grid-cols-8 gap-4 border-b border-gray-100 bg-gray-50 p-4">
+        {Array.from({ length: 8 }).map((_, index) => (
           <Skeleton key={index} className="h-4 w-full" />
         ))}
       </div>
       <div className="divide-y divide-gray-100">
         {Array.from({ length: 8 }).map((_, rowIndex) => (
-          <div key={rowIndex} className="grid grid-cols-7 gap-4 p-4">
-            {Array.from({ length: 7 }).map((_, cellIndex) => (
+          <div key={rowIndex} className="grid grid-cols-8 gap-4 p-4">
+            {Array.from({ length: 8 }).map((_, cellIndex) => (
               <Skeleton key={cellIndex} className="h-5 w-full" />
             ))}
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function DetailLine({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-sm">
+      <span className="text-gray-500">{label}</span>
+      <span className="text-right font-medium text-gray-900">{value}</span>
+    </div>
+  );
+}
+
+function MoneyLine({
+  label,
+  value,
+  danger,
+  total,
+}: {
+  label: string;
+  value: number;
+  danger?: boolean;
+  total?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between gap-4 text-sm",
+        total && "border-t border-gray-100 pt-3 text-base font-semibold"
+      )}
+    >
+      <span className={cn(total ? "text-gray-950" : "text-gray-500")}>
+        {label}
+      </span>
+      <span
+        className={cn(
+          total ? "text-lg text-gray-950" : "font-medium text-gray-900",
+          danger && value > 0 && "text-red-600"
+        )}
+      >
+        {currencyFormatter.format(value)}
+      </span>
     </div>
   );
 }
@@ -560,43 +673,117 @@ function OrderDetailsModal({
   order: AdminOrderRow | null;
   isUpdating: boolean;
   onClose: () => void;
-  onUpdateStatus: (order: AdminOrderRow, status: OrderStatus) => Promise<void>;
+  onUpdateStatus: (
+    order: AdminOrderRow,
+    status: NormalizedOrderStatus
+  ) => Promise<void>;
 }) {
   if (!order) return null;
 
   const actions = getOrderActions(order.status);
+  const isRejected = order.status === "rejected";
+  const isCompleted = order.status === "delivered";
 
   return (
     <Dialog open={Boolean(order)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
-          <DialogTitle>Order #{order.id}</DialogTitle>
+          <DialogTitle>Order #{order.BUSINESS_ORDER_ID}</DialogTitle>
           <DialogDescription>
-            {formatOrderedAt(order.orderedAt)} · <StatusBadge status={order.status} />
+            Full order, customer, payment, and item details from the database.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-950">Customer</h3>
-            <div className="mt-3 space-y-2 text-sm text-gray-600">
-              <p className="font-medium text-gray-900">{order.customerName}</p>
-              <p>{order.phone || "No phone number"}</p>
-              <p>{order.address || "No delivery address"}</p>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-gray-950">
+                Order #{order.BUSINESS_ORDER_ID}
+              </h3>
+              <StatusBadge status={order.status} />
+            </div>
+            <div className="space-y-2">
+              <DetailLine
+                label="Placed at"
+                value={formatDateTime(order.CREATION_DATETIME)}
+              />
+              <DetailLine
+                label="Est. Delivery"
+                value={formatDateTime(order.DELIVERY_ET)}
+              />
+              <DetailLine
+                label="Payment"
+                value={order.PAYMENT_MODE || "Not set"}
+              />
+              {order.STAFF_MEMBER && (
+                <DetailLine label="Staff" value={order.STAFF_MEMBER} />
+              )}
+              {order.TERMINAL && (
+                <DetailLine label="Terminal" value={order.TERMINAL} />
+              )}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {actions.map((action) => (
+                <Button
+                  key={action.status}
+                  disabled={isUpdating}
+                  variant={action.variant === "destructive" ? "destructive" : "default"}
+                  onClick={() => onUpdateStatus(order, action.status)}
+                  className={cn(
+                    action.variant !== "destructive" &&
+                      "bg-foodeez-primary text-white hover:bg-foodeez-secondary"
+                  )}
+                >
+                  {action.label}
+                </Button>
+              ))}
+              {isCompleted && (
+                <Badge variant="outline" className="bg-gray-50 text-gray-600">
+                  Completed
+                </Badge>
+              )}
+              {isRejected && (
+                <Badge variant="outline" className="bg-gray-50 text-gray-600">
+                  Rejected
+                </Badge>
+              )}
             </div>
           </div>
 
           <div className="rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-950">Summary</h3>
-            <div className="mt-3 space-y-2 text-sm text-gray-600">
-              <div className="flex justify-between">
-                <span>Delivery fee</span>
-                <span>{currencyFormatter.format(order.deliveryFee)}</span>
-              </div>
-              <div className="flex justify-between text-base font-semibold text-gray-950">
-                <span>Order total</span>
-                <span>{currencyFormatter.format(order.total)}</span>
-              </div>
+            <h3 className="text-sm font-semibold text-gray-950">Customer</h3>
+            <div className="mt-3 space-y-2">
+              <DetailLine label="Full name" value={customerName(order)} />
+              <DetailLine
+                label="Phone"
+                value={order.VISITOR_PHONE || "No phone"}
+              />
+              <DetailLine
+                label="Email"
+                value={order.VISITOR_EMAIL || "No email"}
+              />
+              <DetailLine
+                label="Delivery address"
+                value={order.DELIVERY_ADDRESS || "No delivery address"}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-950">
+              Financial summary
+            </h3>
+            <div className="mt-3 space-y-2">
+              <MoneyLine label="Gross" value={order.GROSS_AMOUNT} />
+              <MoneyLine
+                label="Discount"
+                value={order.DISCOUNT_AMOUNT}
+                danger
+              />
+              <MoneyLine label="Shipping" value={order.SHIPPING_AMOUNT} />
+              <MoneyLine label="Tax" value={order.TAX_AMOUNT} />
+              <MoneyLine label="Refund" value={order.REFUND_AMOUNT} danger />
+              <MoneyLine label="TOTAL" value={order.FINAL_AMOUNT} total />
             </div>
           </div>
         </div>
@@ -605,22 +792,26 @@ function OrderDetailsModal({
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 hover:bg-gray-50">
-                <TableHead>Product name</TableHead>
+                <TableHead>Product Name</TableHead>
                 <TableHead>Qty</TableHead>
-                <TableHead>Unit price</TableHead>
+                <TableHead>Unit Price</TableHead>
+                <TableHead>Discount</TableHead>
                 <TableHead>Subtotal</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {order.items.length ? (
-                order.items.map((item, index) => (
-                  <TableRow key={`${item.productId}-${index}`}>
+                order.items.map((item) => (
+                  <TableRow key={item.BUSINESS_ORDER_DETAIL_ID}>
                     <TableCell className="font-medium">
-                      {item.productName}
+                      {item.product_title}
                     </TableCell>
-                    <TableCell>{item.quantity}</TableCell>
+                    <TableCell>{item.ORDER_QUANTITY}</TableCell>
                     <TableCell>
-                      {currencyFormatter.format(item.unitPrice)}
+                      {currencyFormatter.format(item.PRODUCT_SELL_PRICE)}
+                    </TableCell>
+                    <TableCell>
+                      {currencyFormatter.format(item.PRODUCT_DISCOUNT)}
                     </TableCell>
                     <TableCell>
                       {currencyFormatter.format(item.subtotal)}
@@ -629,7 +820,7 @@ function OrderDetailsModal({
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-gray-500">
+                  <TableCell colSpan={5} className="py-8 text-center text-gray-500">
                     No order items found.
                   </TableCell>
                 </TableRow>
@@ -638,17 +829,7 @@ function OrderDetailsModal({
           </Table>
         </div>
 
-        <DialogFooter className="gap-2">
-          {actions.map((action) => (
-            <Button
-              key={action.status}
-              disabled={isUpdating}
-              onClick={() => onUpdateStatus(order, action.status)}
-              className="bg-foodeez-primary text-white hover:bg-foodeez-secondary"
-            >
-              {action.label}
-            </Button>
-          ))}
+        <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>

@@ -127,6 +127,7 @@ Data and API patterns:
 - Product catalog interactions in `AdminProductsTable` use server actions from `admin-data.ts` for save, toggle status, and soft delete. Category and tag tables use the dashboard-scoped menu API routes.
 - Orders management uses API routes from the `AdminOrdersPage` client island because it needs filter/search pagination and modal-driven status updates.
 - Current order status mapping is `rejected = 0`, `new = 1`, `preparing = 2`, `ready = 3`, and `delivered = 4`. Valid forward transitions are `new -> preparing`, `new -> rejected`, `preparing -> ready`, and `ready -> delivered`.
+- The selected-business dashboard recent-orders table uses the same order status mapping through `src/services/admin-data.ts`; never map `ORDER_STATUS = 4` to cancelled/rejected because it means delivered.
 
 Naming:
 
@@ -205,6 +206,7 @@ Orders-management components:
 - Orders list and status changes are fetched through `/api/dashboard/[businessId]/orders` and `/api/dashboard/[businessId]/orders/[orderId]/status`.
 - Orders list defaults to all dates so the table matches the all-time KPI counts; users can still filter to Today, Last 7 days, or Custom.
 - Order detail modal displays order ID, ordered date, status, customer name/phone/address, item rows, delivery fee, order total, and available status action buttons.
+- Dashboard recent-order badges should display `new`, `preparing`, `ready`, `delivered`, and `rejected` consistently with the Orders page.
 
 ## Practical Guidance For Future Agents
 

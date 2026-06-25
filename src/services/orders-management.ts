@@ -2,65 +2,88 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export type OrderStatus =
+export type NormalizedOrderStatus =
+  | "pending"
   | "new"
   | "preparing"
   | "ready"
   | "delivered"
   | "rejected";
 
-export type DateRangeFilter = "today" | "last7" | "custom" | "all";
+export type OrderStatus = NormalizedOrderStatus;
+
+export type OrderStatusValue = number | string | null;
 
 export type OrderItemRow = {
-  productId: number | null;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
+  BUSINESS_ORDER_DETAIL_ID: number;
+  BUSINESS_PRODUCT_ID: number | null;
+  product_title: string;
+  ORDER_QUANTITY: number;
+  PRODUCT_SELL_PRICE: number;
+  PRODUCT_DISCOUNT: number;
   subtotal: number;
 };
 
 export type AdminOrderRow = {
-  id: number;
-  customerName: string;
-  phone: string | null;
-  address: string;
-  itemsSummary: string;
+  BUSINESS_ORDER_ID: number;
+  VISITOR_FIRST_NAME: string | null;
+  VISITOR_LAST_NAME: string | null;
+  VISITOR_PHONE: string | null;
+  VISITOR_EMAIL: string | null;
+  DELIVERY_ADDRESS: string | null;
+  ADDRESS_STREET: string | null;
+  ADDRESS_ZIP: string | null;
+  ADDRESS_TOWN: string | null;
+  ADDRESS_COUNTRY_CODE: string | null;
+  ORDER_STATUS: OrderStatusValue;
+  status: NormalizedOrderStatus;
+  PAYMENT_MODE: string | null;
+  GROSS_AMOUNT: number;
+  TAX_AMOUNT: number;
+  NET_AMOUNT: number;
+  DISCOUNT_AMOUNT: number;
+  SHIPPING_AMOUNT: number;
+  REFUND_AMOUNT: number;
+  FINAL_AMOUNT: number;
+  CREATION_DATETIME: string | null;
+  DELIVERY_ET: string | null;
+  TERMINAL: string | null;
+  STAFF_MEMBER: string | null;
+  item_count: number;
   items: OrderItemRow[];
-  total: number;
-  deliveryFee: number;
-  status: OrderStatus;
-  orderedAt: string | null;
 };
 
 export type OrdersKpis = {
-  newPendingCount: number;
-  preparingCount: number;
-  readyCount: number;
-  deliveredTodayCount: number;
-  revenueToday: number;
+  new: number;
+  preparing: number;
+  ready: number;
+  delivered: number;
+  revenue_today: number;
 };
 
 export type ListOrdersParams = {
   businessId: number;
   status?: string | null;
-  dateRange?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
   search?: string | null;
   page?: number;
+  limit?: number;
 };
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
 
-const STATUS_TO_CODE: Record<OrderStatus, number> = {
+const STATUS_CODE_BY_NAME: Record<NormalizedOrderStatus, number> = {
   rejected: 0,
+  pending: 1,
   new: 1,
   preparing: 2,
   ready: 3,
   delivered: 4,
 };
 
-const CODE_TO_STATUS: Record<number, OrderStatus> = {
+const STATUS_NAME_BY_CODE: Record<number, NormalizedOrderStatus> = {
   0: "rejected",
   1: "new",
   2: "preparing",
@@ -76,79 +99,84 @@ function toNumber(value: unknown) {
   return Number(value ?? 0);
 }
 
-function parseOrderStatus(value: string | null | undefined) {
-  if (!value || value === "all") return null;
-  return value in STATUS_TO_CODE ? (value as OrderStatus) : null;
+function unique<T>(items: T[]) {
+  return Array.from(new Set(items));
 }
 
-function mapOrderStatus(code: number | null | undefined): OrderStatus {
-  return CODE_TO_STATUS[Number(code ?? 1)] || "new";
+function startOfDay(value: Date) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
 }
 
-function startOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
+function endOfDay(value: Date) {
+  const date = new Date(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
 }
 
-function endOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(23, 59, 59, 999);
-  return next;
-}
-
-function getDateBounds(
-  dateRange: string | null | undefined,
-  startDate?: string | null,
-  endDate?: string | null
-) {
-  const now = new Date();
-
-  if (dateRange === "today") {
-    return {
-      gte: startOfDay(now),
-      lte: endOfDay(now),
-    };
+function normalizeStatus(value: unknown): NormalizedOrderStatus {
+  if (typeof value === "number") {
+    return STATUS_NAME_BY_CODE[value] || "new";
   }
 
-  if (dateRange === "last7") {
-    const start = startOfDay(now);
-    start.setDate(start.getDate() - 6);
-
-    return {
-      gte: start,
-      lte: endOfDay(now),
-    };
+  if (typeof value === "bigint") {
+    return STATUS_NAME_BY_CODE[Number(value)] || "new";
   }
 
-  if (dateRange === "custom" && startDate && endDate) {
-    return {
-      gte: startOfDay(new Date(startDate)),
-      lte: endOfDay(new Date(endDate)),
-    };
-  }
+  const status = String(value ?? "")
+    .trim()
+    .toLowerCase();
 
-  return null;
+  if (status === "0") return "rejected";
+  if (status === "1") return "new";
+  if (status === "2") return "preparing";
+  if (status === "3") return "ready";
+  if (status === "4") return "delivered";
+  if (status === "pending") return "pending";
+  if (status === "new") return "new";
+  if (status === "preparing") return "preparing";
+  if (status === "ready") return "ready";
+  if (status === "delivered") return "delivered";
+  if (status === "rejected") return "rejected";
+
+  return "new";
 }
 
-function formatCustomer(firstName?: string | null, lastName?: string | null) {
-  const name = [firstName, lastName].filter(Boolean).join(" ").trim();
-  return name || "Guest customer";
+function parseStatusFilter(status: string | null | undefined) {
+  if (!status || status === "all") return null;
+
+  const normalized = normalizeStatus(status);
+  return STATUS_CODE_BY_NAME[normalized];
 }
 
-function formatAddress(order: {
+function parseDate(value: string | null | undefined, boundary: "start" | "end") {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return boundary === "start" ? startOfDay(date) : endOfDay(date);
+}
+
+function buildAddress(order: {
   ADDRESS_STREET?: string | null;
   ADDRESS_ZIP?: string | null;
   ADDRESS_TOWN?: string | null;
   ADDRESS_COUNTRY_CODE?: string | null;
 }) {
-  return [
+  const cityLine = [order.ADDRESS_ZIP, order.ADDRESS_TOWN]
+    .filter(Boolean)
+    .join(" ");
+  const address = [
     order.ADDRESS_STREET,
-    [order.ADDRESS_ZIP, order.ADDRESS_TOWN].filter(Boolean).join(" "),
+    cityLine,
     order.ADDRESS_COUNTRY_CODE,
   ]
     .filter(Boolean)
     .join(", ");
+
+  return address || null;
 }
 
 async function getVisitorAccountId() {
@@ -193,126 +221,112 @@ export async function requireOrdersBusinessAccess(businessId: number) {
   }
 }
 
-async function buildOrderRows(orders: Awaited<ReturnType<typeof prisma.business_order.findMany>>) {
+async function buildOrderRows(
+  orders: Awaited<ReturnType<typeof prisma.business_order.findMany>>
+) {
   const orderIds = orders.map((order) => order.BUSINESS_ORDER_ID);
   const details = orderIds.length
     ? await prisma.business_order_detail.findMany({
         where: { BUSINESS_ORDER_ID: { in: orderIds } },
+        orderBy: { BUSINESS_ORDER_DETAIL_ID: "asc" },
       })
     : [];
-  const productIds = details
-    .map((detail) => detail.BUSINESS_PRODUCT_ID)
-    .filter((id): id is number => id !== null);
+
+  const productIds = unique(
+    details
+      .map((detail) => detail.BUSINESS_PRODUCT_ID)
+      .filter((id): id is number => id !== null)
+  );
   const products = productIds.length
     ? await prisma.business_product.findMany({
         where: { BUSINESS_PRODUCT_ID: { in: productIds } },
+        select: { BUSINESS_PRODUCT_ID: true, TITLE: true },
       })
     : [];
+  const productTitleById = new Map(
+    products.map((product) => [product.BUSINESS_PRODUCT_ID, product.TITLE])
+  );
 
   return orders.map<AdminOrderRow>((order) => {
     const orderItems = details.filter(
       (detail) => detail.BUSINESS_ORDER_ID === order.BUSINESS_ORDER_ID
     );
     const items = orderItems.map<OrderItemRow>((detail) => {
-      const product = products.find(
-        (item) => item.BUSINESS_PRODUCT_ID === detail.BUSINESS_PRODUCT_ID
-      );
       const quantity = detail.ORDER_QUANTITY || 0;
-      const unitPrice = toNumber(detail.PRODUCT_SELL_PRICE || detail.PRODUCT_PRICE);
+      const sellPrice = toNumber(detail.PRODUCT_SELL_PRICE);
 
       return {
-        productId: detail.BUSINESS_PRODUCT_ID,
-        productName:
-          product?.TITLE ||
+        BUSINESS_ORDER_DETAIL_ID: detail.BUSINESS_ORDER_DETAIL_ID,
+        BUSINESS_PRODUCT_ID: detail.BUSINESS_PRODUCT_ID,
+        product_title:
+          (detail.BUSINESS_PRODUCT_ID
+            ? productTitleById.get(detail.BUSINESS_PRODUCT_ID)
+            : null) ||
           (detail.BUSINESS_PRODUCT_ID
             ? `Product #${detail.BUSINESS_PRODUCT_ID}`
             : "Unknown product"),
-        quantity,
-        unitPrice,
-        subtotal: quantity * unitPrice,
+        ORDER_QUANTITY: quantity,
+        PRODUCT_SELL_PRICE: sellPrice,
+        PRODUCT_DISCOUNT: toNumber(detail.PRODUCT_DISCOUNT),
+        subtotal: quantity * sellPrice,
       };
     });
 
     return {
-      id: order.BUSINESS_ORDER_ID,
-      customerName: formatCustomer(order.FIRST_NAME, order.LAST_NAME),
-      phone: order.PHONE_NUMBER || null,
-      address: formatAddress(order),
-      itemsSummary: items.length
-        ? items
-            .slice(0, 2)
-            .map((item) => `${item.quantity}x ${item.productName}`)
-            .join(", ") + (items.length > 2 ? ` +${items.length - 2} more` : "")
-        : "No items",
+      BUSINESS_ORDER_ID: order.BUSINESS_ORDER_ID,
+      VISITOR_FIRST_NAME: order.FIRST_NAME,
+      VISITOR_LAST_NAME: order.LAST_NAME,
+      VISITOR_PHONE: order.PHONE_NUMBER,
+      VISITOR_EMAIL: order.EMAIL_ADDRESS,
+      DELIVERY_ADDRESS: buildAddress(order),
+      ADDRESS_STREET: order.ADDRESS_STREET,
+      ADDRESS_ZIP: order.ADDRESS_ZIP,
+      ADDRESS_TOWN: order.ADDRESS_TOWN,
+      ADDRESS_COUNTRY_CODE: order.ADDRESS_COUNTRY_CODE,
+      ORDER_STATUS: order.ORDER_STATUS,
+      status: normalizeStatus(order.ORDER_STATUS),
+      PAYMENT_MODE: order.PAYMENT_MODE,
+      GROSS_AMOUNT: toNumber(order.ORDER_GROSS_AMOUNT),
+      TAX_AMOUNT: toNumber(order.ORDER_TAX_AMOUNT),
+      NET_AMOUNT: toNumber(order.ORDER_NET_AMOUNT),
+      DISCOUNT_AMOUNT: toNumber(order.ORDER_DISCOUNT_AMOUNT),
+      SHIPPING_AMOUNT: toNumber(order.SHIPPING_CHARGES),
+      REFUND_AMOUNT: toNumber(order.ORDER_REFUND_AMOUNT),
+      FINAL_AMOUNT: toNumber(order.ORDER_FINAL_AMOUNT),
+      CREATION_DATETIME: order.CREATION_DATETIME?.toISOString() || null,
+      DELIVERY_ET: order.DELIVERY_ET?.toISOString() || null,
+      TERMINAL: order.TERMINAL,
+      STAFF_MEMBER: order.STAFF_MEMBER,
+      item_count: items.length,
       items,
-      total: toNumber(order.ORDER_FINAL_AMOUNT),
-      deliveryFee: toNumber(order.SHIPPING_CHARGES),
-      status: mapOrderStatus(order.ORDER_STATUS),
-      orderedAt: order.CREATION_DATETIME?.toISOString() || null,
     };
   });
 }
 
-async function getOrdersKpis(businessId: number): Promise<OrdersKpis> {
-  const today = new Date();
-  const todayStart = startOfDay(today);
-  const todayEnd = endOfDay(today);
-  const orders = await prisma.business_order.findMany({
-    where: { BUSINESS_ID: businessId },
-  });
-  const deliveredTodayOrders = orders.filter((order) => {
-    if (order.ORDER_STATUS !== STATUS_TO_CODE.delivered) return false;
-    const deliveredAt = order.DELIVERY_DATETIME || order.CREATION_DATETIME;
-    return Boolean(deliveredAt && deliveredAt >= todayStart && deliveredAt <= todayEnd);
-  });
-
-  return {
-    newPendingCount: orders.filter(
-      (order) => order.ORDER_STATUS === STATUS_TO_CODE.new
-    ).length,
-    preparingCount: orders.filter(
-      (order) => order.ORDER_STATUS === STATUS_TO_CODE.preparing
-    ).length,
-    readyCount: orders.filter(
-      (order) => order.ORDER_STATUS === STATUS_TO_CODE.ready
-    ).length,
-    deliveredTodayCount: deliveredTodayOrders.length,
-    revenueToday: deliveredTodayOrders.reduce(
-      (total, order) => total + toNumber(order.ORDER_FINAL_AMOUNT),
-      0
-    ),
-  };
-}
-
-export async function listOrders(params: ListOrdersParams) {
-  await requireOrdersBusinessAccess(params.businessId);
-
-  const status = parseOrderStatus(params.status);
-  const dateBounds = getDateBounds(
-    params.dateRange,
-    params.startDate,
-    params.endDate
-  );
-  const page = Math.max(1, Number(params.page || 1));
-  const search = params.search?.trim();
+function buildOrderWhere(params: ListOrdersParams) {
   const where: Record<string, unknown> = {
-    BUSINESS_ID: params.businessId,
+    BUSINESS_ID: Number(params.businessId),
   };
+  const status = parseStatusFilter(params.status);
+  const dateFrom = parseDate(params.dateFrom, "start");
+  const dateTo = parseDate(params.dateTo, "end");
+  const search = params.search?.trim();
 
-  if (status) {
-    where.ORDER_STATUS = STATUS_TO_CODE[status];
+  if (status !== null) {
+    where.ORDER_STATUS = status;
   }
 
-  if (dateBounds) {
-    where.CREATION_DATETIME = dateBounds;
+  if (dateFrom || dateTo) {
+    where.CREATION_DATETIME = {
+      ...(dateFrom ? { gte: dateFrom } : {}),
+      ...(dateTo ? { lte: dateTo } : {}),
+    };
   }
 
   if (search) {
-    const orderNumber = Number(search);
+    const orderId = Number(search);
     where.OR = [
-      ...(Number.isFinite(orderNumber)
-        ? [{ BUSINESS_ORDER_ID: orderNumber }]
-        : []),
+      ...(Number.isInteger(orderId) ? [{ BUSINESS_ORDER_ID: orderId }] : []),
       { FIRST_NAME: { contains: search } },
       { LAST_NAME: { contains: search } },
       { EMAIL_ADDRESS: { contains: search } },
@@ -320,56 +334,129 @@ export async function listOrders(params: ListOrdersParams) {
     ];
   }
 
-  const orderQueryArgs = { // FIXED: Orders table query mismatch
-    where, // FIXED: Orders table query mismatch
-    orderBy: { CREATION_DATETIME: "desc" as const }, // FIXED: Orders table query mismatch
-    skip: (page - 1) * PAGE_SIZE, // FIXED: Orders table query mismatch
-    take: PAGE_SIZE, // FIXED: Orders table query mismatch
-  }; // FIXED: Orders table query mismatch
+  return where;
+}
 
-  if (process.env.NODE_ENV === "development") { // FIXED: Orders table query mismatch
-    console.log("[orders:list] Prisma query args", { // FIXED: Orders table query mismatch
-      tableQuery: orderQueryArgs, // FIXED: Orders table query mismatch
-      kpiQuery: { where: { BUSINESS_ID: params.businessId } }, // FIXED: Orders table query mismatch
-    }); // FIXED: Orders table query mismatch
-  } // FIXED: Orders table query mismatch
+async function getOrdersKpis(businessId: number): Promise<OrdersKpis> {
+  const todayStart = startOfDay(new Date());
+  const todayEnd = endOfDay(new Date());
+  const orders = await prisma.business_order.findMany({
+    where: { BUSINESS_ID: Number(businessId) },
+    select: {
+      ORDER_STATUS: true,
+      ORDER_FINAL_AMOUNT: true,
+      CREATION_DATETIME: true,
+    },
+  });
 
-  const [totalCount, orders, kpis] = await Promise.all([
+  return orders.reduce<OrdersKpis>(
+    (kpi, order) => {
+      const status = normalizeStatus(order.ORDER_STATUS);
+
+      if (status === "new" || status === "pending") kpi.new += 1;
+      if (status === "preparing") kpi.preparing += 1;
+      if (status === "ready") kpi.ready += 1;
+      if (status === "delivered") kpi.delivered += 1;
+
+      if (
+        order.CREATION_DATETIME &&
+        order.CREATION_DATETIME >= todayStart &&
+        order.CREATION_DATETIME <= todayEnd
+      ) {
+        kpi.revenue_today += toNumber(order.ORDER_FINAL_AMOUNT);
+      }
+
+      return kpi;
+    },
+    { new: 0, preparing: 0, ready: 0, delivered: 0, revenue_today: 0 }
+  );
+}
+
+export async function listOrders(params: ListOrdersParams) {
+  const businessId = Number(params.businessId);
+
+  if (!Number.isInteger(businessId)) {
+    throw new Error("Invalid businessId");
+  }
+
+  await requireOrdersBusinessAccess(businessId);
+
+  const page = Math.max(1, Number(params.page || 1));
+  const limit = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Number(params.limit || DEFAULT_PAGE_SIZE))
+  );
+  const where = buildOrderWhere({ ...params, businessId });
+  const orderQueryArgs = {
+    where,
+    orderBy: { CREATION_DATETIME: "desc" as const },
+    skip: (page - 1) * limit,
+    take: limit,
+  };
+
+  if (process.env.NODE_ENV === "development") {
+    console.log("[orders:list] Prisma where", where);
+  }
+
+  const [totalCount, orders, kpi, rawStatuses] = await Promise.all([
     prisma.business_order.count({ where }),
-    prisma.business_order.findMany(orderQueryArgs), // FIXED: Orders table query mismatch
-    getOrdersKpis(params.businessId),
+    prisma.business_order.findMany(orderQueryArgs),
+    getOrdersKpis(businessId),
+    prisma.business_order.findMany({
+      where: { BUSINESS_ID: businessId },
+      distinct: ["ORDER_STATUS"],
+      select: { ORDER_STATUS: true },
+    }),
   ]);
 
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      "[orders:list] Raw ORDER_STATUS values",
+      rawStatuses.map((order) => order.ORDER_STATUS)
+    );
+  }
+
   return {
-    kpis,
     orders: await buildOrderRows(orders),
-    pagination: {
-      page,
-      pageSize: PAGE_SIZE,
-      totalCount,
-      totalPages: Math.max(1, Math.ceil(totalCount / PAGE_SIZE)),
-    },
+    totalCount,
+    page,
+    totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+    kpi,
   };
 }
 
-export function getAllowedNextStatuses(status: OrderStatus): OrderStatus[] {
-  if (status === "new") return ["preparing", "rejected"];
-  if (status === "preparing") return ["ready"];
-  if (status === "ready") return ["delivered"];
+export function getAllowedNextStatuses(
+  status: unknown
+): NormalizedOrderStatus[] {
+  const normalized = normalizeStatus(status);
+
+  if (normalized === "new" || normalized === "pending") {
+    return ["preparing", "rejected"];
+  }
+
+  if (normalized === "preparing") return ["ready"];
+  if (normalized === "ready") return ["delivered"];
   return [];
 }
 
 export async function updateOrderStatus(
   businessId: number,
   orderId: number,
-  nextStatus: OrderStatus
+  nextStatus: NormalizedOrderStatus
 ) {
-  await requireOrdersBusinessAccess(businessId);
+  const parsedBusinessId = Number(businessId);
+  const parsedOrderId = Number(orderId);
+
+  if (!Number.isInteger(parsedBusinessId) || !Number.isInteger(parsedOrderId)) {
+    throw new Error("Invalid route params");
+  }
+
+  await requireOrdersBusinessAccess(parsedBusinessId);
 
   const order = await prisma.business_order.findFirst({
     where: {
-      BUSINESS_ORDER_ID: orderId,
-      BUSINESS_ID: businessId,
+      BUSINESS_ORDER_ID: parsedOrderId,
+      BUSINESS_ID: parsedBusinessId,
     },
   });
 
@@ -377,17 +464,16 @@ export async function updateOrderStatus(
     throw new Error("Order not found");
   }
 
-  const currentStatus = mapOrderStatus(order.ORDER_STATUS);
-  const allowedNextStatuses = getAllowedNextStatuses(currentStatus);
+  const allowedNextStatuses = getAllowedNextStatuses(order.ORDER_STATUS);
 
   if (!allowedNextStatuses.includes(nextStatus)) {
     throw new Error("Invalid status transition");
   }
 
   const updatedOrder = await prisma.business_order.update({
-    where: { BUSINESS_ORDER_ID: orderId },
+    where: { BUSINESS_ORDER_ID: parsedOrderId },
     data: {
-      ORDER_STATUS: STATUS_TO_CODE[nextStatus],
+      ORDER_STATUS: STATUS_CODE_BY_NAME[nextStatus],
       DELIVERY_DATETIME:
         nextStatus === "delivered" ? new Date() : order.DELIVERY_DATETIME,
     },

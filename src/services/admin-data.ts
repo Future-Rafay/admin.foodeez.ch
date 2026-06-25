@@ -30,7 +30,13 @@ export type RecentOrderRow = {
   customer: string;
   items: number;
   total: number;
-  status: "new" | "pending" | "completed" | "cancelled" | "unknown";
+  status:
+    | "new"
+    | "preparing"
+    | "ready"
+    | "delivered"
+    | "rejected"
+    | "unknown";
   createdAt: string | null;
 };
 
@@ -78,9 +84,10 @@ function formatCustomer(firstName?: string | null, lastName?: string | null) {
 
 function mapOrderStatus(status?: number | null): RecentOrderRow["status"] {
   if (status === 1) return "new";
-  if (status === 2) return "pending";
-  if (status === 3) return "completed";
-  if (status === 0 || status === 4) return "cancelled";
+  if (status === 2) return "preparing";
+  if (status === 3) return "ready";
+  if (status === 4) return "delivered";
+  if (status === 0) return "rejected";
   return "unknown";
 }
 
@@ -199,8 +206,8 @@ export async function getBusinessDashboardData(businessId: number) {
       (total, order) => total + toNumber(order.ORDER_FINAL_AMOUNT),
       0
     ),
-    pendingOrders: orders.filter(
-      (order) => order.ORDER_STATUS === 1 || order.ORDER_STATUS === 2
+    pendingOrders: orders.filter((order) =>
+      [1, 2, 3].includes(Number(order.ORDER_STATUS))
     ).length,
     activeProducts: products.filter((product) => product.STATUS === 1).length,
   };

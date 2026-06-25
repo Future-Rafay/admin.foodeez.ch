@@ -44,11 +44,21 @@ function formatDateTime(value: string | null) {
 }
 
 function statusClasses(status: string) {
-  if (status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "cancelled") return "border-red-200 bg-red-50 text-red-700";
-  if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-700";
-  if (status === "new") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (status === "new") return "border-yellow-200 bg-yellow-50 text-yellow-800";
+  if (status === "preparing") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (status === "ready") return "border-purple-200 bg-purple-50 text-purple-700";
+  if (status === "delivered") return "border-green-200 bg-green-50 text-green-700";
+  if (status === "rejected") return "border-red-200 bg-red-50 text-red-700";
   return "border-gray-200 bg-gray-50 text-gray-600";
+}
+
+function statusLabel(status: string) {
+  if (status === "new") return "New";
+  if (status === "preparing") return "Preparing";
+  if (status === "ready") return "Ready";
+  if (status === "delivered") return "Delivered";
+  if (status === "rejected") return "Rejected";
+  return "Unknown";
 }
 
 export default async function DashboardPage({ params }: DashboardPageProps) {
@@ -92,7 +102,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
       label: "Pending Orders",
       value: numberFormatter.format(data.kpis.pendingOrders),
       icon: AlertCircle,
-      help: "New or pending orders",
+      help: "Orders not delivered or rejected",
     },
     {
       label: "Active Products",
@@ -177,9 +187,9 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={cn("capitalize", statusClasses(order.status))}
+                          className={cn(statusClasses(order.status))}
                         >
-                          {order.status}
+                          {statusLabel(order.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-gray-500">
