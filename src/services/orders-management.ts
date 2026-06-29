@@ -1,14 +1,19 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import {
+  PAYMENT_DONE,
+  STATUS_CODE_BY_NAME,
+  canTransitionOrderStatus,
+  isStripePaidOrder,
+  normalizeOrderStatus,
+  normalizeOrderType,
+  type OrderStatusName,
+  type OrderType,
+} from "@/lib/orderStatus";
+import { createBusinessNotification } from "@/lib/businessNotifications";
 import prisma from "@/lib/prisma";
 
-export type NormalizedOrderStatus =
-  | "pending"
-  | "new"
-  | "preparing"
-  | "ready"
-  | "delivered"
-  | "rejected";
+export type NormalizedOrderStatus = OrderStatusName;
 
 export type OrderStatus = NormalizedOrderStatus;
 
@@ -37,7 +42,9 @@ export type AdminOrderRow = {
   ADDRESS_COUNTRY_CODE: string | null;
   ORDER_STATUS: OrderStatusValue;
   status: NormalizedOrderStatus;
+  ORDER_TYPE: OrderType;
   PAYMENT_MODE: string | null;
+  PAYMENT_DONE: number | null;
   GROSS_AMOUNT: number;
   TAX_AMOUNT: number;
   NET_AMOUNT: number;
@@ -47,6 +54,11 @@ export type AdminOrderRow = {
   FINAL_AMOUNT: number;
   CREATION_DATETIME: string | null;
   DELIVERY_ET: string | null;
+  DELIVERY_DATETIME: string | null;
+  ETA_ACKNOWLEDGED_DATETIME: string | null;
+  ORDER_REJECTION_REASON: string | null;
+  ORDER_REJECTION_NOTE: string | null;
+  REJECTED_DATETIME: string | null;
   TERMINAL: string | null;
   STAFF_MEMBER: string | null;
   item_count: number;
@@ -56,9 +68,17 @@ export type AdminOrderRow = {
 export type OrdersKpis = {
   new: number;
   preparing: number;
-  ready: number;
+  out_for_delivery: number;
+  ready_for_pickup: number;
   delivered: number;
+  picked_up: number;
+  rejected: number;
   revenue_today: number;
+};
+
+export type OrderPrepDefaults = {
+  defaultPickupPrepMinutes: number;
+  defaultDeliveryPrepMinutes: number;
 };
 
 export type ListOrdersParams = {
@@ -73,23 +93,6 @@ export type ListOrdersParams = {
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
-
-const STATUS_CODE_BY_NAME: Record<NormalizedOrderStatus, number> = {
-  rejected: 0,
-  pending: 1,
-  new: 1,
-  preparing: 2,
-  ready: 3,
-  delivered: 4,
-};
-
-const STATUS_NAME_BY_CODE: Record<number, NormalizedOrderStatus> = {
-  0: "rejected",
-  1: "new",
-  2: "preparing",
-  3: "ready",
-  4: "delivered",
-};
 
 function toNumber(value: unknown) {
   if (value && typeof value === "object" && "toNumber" in value) {
@@ -115,38 +118,10 @@ function endOfDay(value: Date) {
   return date;
 }
 
-function normalizeStatus(value: unknown): NormalizedOrderStatus {
-  if (typeof value === "number") {
-    return STATUS_NAME_BY_CODE[value] || "new";
-  }
-
-  if (typeof value === "bigint") {
-    return STATUS_NAME_BY_CODE[Number(value)] || "new";
-  }
-
-  const status = String(value ?? "")
-    .trim()
-    .toLowerCase();
-
-  if (status === "0") return "rejected";
-  if (status === "1") return "new";
-  if (status === "2") return "preparing";
-  if (status === "3") return "ready";
-  if (status === "4") return "delivered";
-  if (status === "pending") return "pending";
-  if (status === "new") return "new";
-  if (status === "preparing") return "preparing";
-  if (status === "ready") return "ready";
-  if (status === "delivered") return "delivered";
-  if (status === "rejected") return "rejected";
-
-  return "new";
-}
-
 function parseStatusFilter(status: string | null | undefined) {
   if (!status || status === "all") return null;
 
-  const normalized = normalizeStatus(status);
+  const normalized = normalizeOrderStatus(status);
   return STATUS_CODE_BY_NAME[normalized];
 }
 
@@ -284,8 +259,10 @@ async function buildOrderRows(
       ADDRESS_TOWN: order.ADDRESS_TOWN,
       ADDRESS_COUNTRY_CODE: order.ADDRESS_COUNTRY_CODE,
       ORDER_STATUS: order.ORDER_STATUS,
-      status: normalizeStatus(order.ORDER_STATUS),
+      status: normalizeOrderStatus(order.ORDER_STATUS),
+      ORDER_TYPE: normalizeOrderType(order.ORDER_TYPE),
       PAYMENT_MODE: order.PAYMENT_MODE,
+      PAYMENT_DONE: order.PAYMENT_DONE,
       GROSS_AMOUNT: toNumber(order.ORDER_GROSS_AMOUNT),
       TAX_AMOUNT: toNumber(order.ORDER_TAX_AMOUNT),
       NET_AMOUNT: toNumber(order.ORDER_NET_AMOUNT),
@@ -295,6 +272,12 @@ async function buildOrderRows(
       FINAL_AMOUNT: toNumber(order.ORDER_FINAL_AMOUNT),
       CREATION_DATETIME: order.CREATION_DATETIME?.toISOString() || null,
       DELIVERY_ET: order.DELIVERY_ET?.toISOString() || null,
+      DELIVERY_DATETIME: order.DELIVERY_DATETIME?.toISOString() || null,
+      ETA_ACKNOWLEDGED_DATETIME:
+        order.ETA_ACKNOWLEDGED_DATETIME?.toISOString() || null,
+      ORDER_REJECTION_REASON: order.ORDER_REJECTION_REASON,
+      ORDER_REJECTION_NOTE: order.ORDER_REJECTION_NOTE,
+      REJECTED_DATETIME: order.REJECTED_DATETIME?.toISOString() || null,
       TERMINAL: order.TERMINAL,
       STAFF_MEMBER: order.STAFF_MEMBER,
       item_count: items.length,
@@ -351,12 +334,14 @@ async function getOrdersKpis(businessId: number): Promise<OrdersKpis> {
 
   return orders.reduce<OrdersKpis>(
     (kpi, order) => {
-      const status = normalizeStatus(order.ORDER_STATUS);
+      const status = normalizeOrderStatus(order.ORDER_STATUS);
 
-      if (status === "new" || status === "pending") kpi.new += 1;
       if (status === "preparing") kpi.preparing += 1;
-      if (status === "ready") kpi.ready += 1;
+      if (status === "out_for_delivery") kpi.out_for_delivery += 1;
+      if (status === "ready_for_pickup") kpi.ready_for_pickup += 1;
       if (status === "delivered") kpi.delivered += 1;
+      if (status === "picked_up") kpi.picked_up += 1;
+      if (status === "rejected") kpi.rejected += 1;
 
       if (
         order.CREATION_DATETIME &&
@@ -368,7 +353,16 @@ async function getOrdersKpis(businessId: number): Promise<OrdersKpis> {
 
       return kpi;
     },
-    { new: 0, preparing: 0, ready: 0, delivered: 0, revenue_today: 0 }
+    {
+      new: 0,
+      preparing: 0,
+      out_for_delivery: 0,
+      ready_for_pickup: 0,
+      delivered: 0,
+      picked_up: 0,
+      rejected: 0,
+      revenue_today: 0,
+    }
   );
 }
 
@@ -409,6 +403,14 @@ export async function listOrders(params: ListOrdersParams) {
     }),
   ]);
 
+  const settings = await prisma.business_settings.findUnique({
+    where: { BUSINESS_ID: businessId },
+    select: {
+      DEFAULT_PICKUP_PREP_MINUTES: true,
+      DEFAULT_DELIVERY_PREP_MINUTES: true,
+    },
+  });
+
   if (process.env.NODE_ENV === "development") {
     console.log(
       "[orders:list] Raw ORDER_STATUS values",
@@ -422,27 +424,18 @@ export async function listOrders(params: ListOrdersParams) {
     page,
     totalPages: Math.max(1, Math.ceil(totalCount / limit)),
     kpi,
+    prepDefaults: {
+      defaultPickupPrepMinutes: settings?.DEFAULT_PICKUP_PREP_MINUTES ?? 20,
+      defaultDeliveryPrepMinutes: settings?.DEFAULT_DELIVERY_PREP_MINUTES ?? 45,
+    },
   };
-}
-
-export function getAllowedNextStatuses(
-  status: unknown
-): NormalizedOrderStatus[] {
-  const normalized = normalizeStatus(status);
-
-  if (normalized === "new" || normalized === "pending") {
-    return ["preparing", "rejected"];
-  }
-
-  if (normalized === "preparing") return ["ready"];
-  if (normalized === "ready") return ["delivered"];
-  return [];
 }
 
 export async function updateOrderStatus(
   businessId: number,
   orderId: number,
-  nextStatus: NormalizedOrderStatus
+  nextStatus: NormalizedOrderStatus,
+  options: { rejectionReason?: string; rejectionNote?: string } = {}
 ) {
   const parsedBusinessId = Number(businessId);
   const parsedOrderId = Number(orderId);
@@ -464,20 +457,129 @@ export async function updateOrderStatus(
     throw new Error("Order not found");
   }
 
-  const allowedNextStatuses = getAllowedNextStatuses(order.ORDER_STATUS);
-
-  if (!allowedNextStatuses.includes(nextStatus)) {
+  if (
+    !canTransitionOrderStatus(order.ORDER_STATUS, nextStatus, order.ORDER_TYPE)
+  ) {
     throw new Error("Invalid status transition");
+  }
+
+  if (nextStatus === "rejected" && !options.rejectionReason?.trim()) {
+    throw new Error("Rejection reason is required");
+  }
+
+  if (nextStatus === "rejected" && isStripePaidOrder(order)) {
+    throw new Error("Stripe refund required before rejection");
+  }
+
+  const now = new Date();
+  const data: Record<string, unknown> = {
+    ORDER_STATUS: STATUS_CODE_BY_NAME[nextStatus],
+  };
+
+  if (nextStatus === "delivered") {
+    data.DELIVERY_DATETIME = now;
+    if (order.PAYMENT_MODE?.toLowerCase().includes("cash")) {
+      data.PAYMENT_DONE = PAYMENT_DONE.PAID;
+    }
+  }
+
+  if (nextStatus === "picked_up") {
+    data.DELIVERY_DATETIME = now;
+    if (order.PAYMENT_DONE === PAYMENT_DONE.PENDING) {
+      data.PAYMENT_DONE = PAYMENT_DONE.PAID;
+    }
+  }
+
+  if (nextStatus === "rejected") {
+    data.ORDER_REJECTION_REASON = options.rejectionReason?.trim();
+    data.ORDER_REJECTION_NOTE = options.rejectionNote?.trim() || null;
+    data.REJECTED_DATETIME = now;
   }
 
   const updatedOrder = await prisma.business_order.update({
     where: { BUSINESS_ORDER_ID: parsedOrderId },
+    data,
+  });
+
+  if (nextStatus === "rejected") {
+    await createBusinessNotification({
+      businessId: parsedBusinessId,
+      type: "order",
+      title: "Order rejected",
+      message: `Order #${parsedOrderId} rejected: ${options.rejectionReason?.trim()}`,
+      linkUrl: `/dashboard/${parsedBusinessId}/orders?orderId=${parsedOrderId}`,
+      metadata: {
+        orderId: parsedOrderId,
+        orderType: normalizeOrderType(order.ORDER_TYPE),
+        reason: options.rejectionReason?.trim(),
+      },
+    }).catch((error) => {
+      console.error("Failed to create rejection notification:", error);
+    });
+  }
+
+  return (await buildOrderRows([updatedOrder]))[0];
+}
+
+export async function updateOrderEta(
+  businessId: number,
+  orderId: number,
+  eta: string
+) {
+  const parsedBusinessId = Number(businessId);
+  const parsedOrderId = Number(orderId);
+  const etaDate = new Date(eta);
+
+  if (!Number.isInteger(parsedBusinessId) || !Number.isInteger(parsedOrderId)) {
+    throw new Error("Invalid route params");
+  }
+
+  if (!eta || Number.isNaN(etaDate.getTime())) {
+    throw new Error("ETA is required");
+  }
+
+  await requireOrdersBusinessAccess(parsedBusinessId);
+
+  const order = await prisma.business_order.findFirst({
+    where: {
+      BUSINESS_ORDER_ID: parsedOrderId,
+      BUSINESS_ID: parsedBusinessId,
+    },
+  });
+
+  if (!order) throw new Error("Order not found");
+
+  const updatedOrder = await prisma.business_order.update({
+    where: { BUSINESS_ORDER_ID: parsedOrderId },
     data: {
-      ORDER_STATUS: STATUS_CODE_BY_NAME[nextStatus],
-      DELIVERY_DATETIME:
-        nextStatus === "delivered" ? new Date() : order.DELIVERY_DATETIME,
+      DELIVERY_ET: etaDate,
+      ETA_ACKNOWLEDGED_DATETIME: new Date(),
     },
   });
 
   return (await buildOrderRows([updatedOrder]))[0];
+}
+
+export async function refundOrderPlaceholder(businessId: number, orderId: number) {
+  const parsedBusinessId = Number(businessId);
+  const parsedOrderId = Number(orderId);
+
+  if (!Number.isInteger(parsedBusinessId) || !Number.isInteger(parsedOrderId)) {
+    throw new Error("Invalid route params");
+  }
+
+  await requireOrdersBusinessAccess(parsedBusinessId);
+
+  const order = await prisma.business_order.findFirst({
+    where: {
+      BUSINESS_ORDER_ID: parsedOrderId,
+      BUSINESS_ID: parsedBusinessId,
+    },
+  });
+
+  if (!order) throw new Error("Order not found");
+
+  throw new Error(
+    "Stripe refund is not implemented in admin yet because STRIPE_PAYMENT_INTENT_ID is not stored."
+  );
 }

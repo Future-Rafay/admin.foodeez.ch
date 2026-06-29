@@ -1,9 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, ChevronRight, Plus } from "lucide-react";
-import { ReactNode, RefObject, useEffect, useRef, useState } from "react"; // FIXED: Quick Actions dropdown
+import {
+  ReactNode,
+  RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AdminHeaderProps {
   businessId: string;
@@ -20,36 +35,145 @@ function humanizeSegment(segment: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function useClickOutside( // FIXED: Quick Actions dropdown
-  ref: RefObject<HTMLElement | null>, // FIXED: Quick Actions dropdown
-  onClickOutside: () => void // FIXED: Quick Actions dropdown
-) { // FIXED: Quick Actions dropdown
-  useEffect(() => { // FIXED: Quick Actions dropdown
-    function handlePointerDown(event: MouseEvent | TouchEvent) { // FIXED: Quick Actions dropdown
-      if (ref.current && !ref.current.contains(event.target as Node)) { // FIXED: Quick Actions dropdown
-        onClickOutside(); // FIXED: Quick Actions dropdown
-      } // FIXED: Quick Actions dropdown
-    } // FIXED: Quick Actions dropdown
+type BusinessNotification = {
+  BUSINESS_NOTIFICATION_ID: number;
+  NOTIFICATION_TYPE: "order" | "refund" | "system" | "menu" | "payment";
+  TITLE: string;
+  MESSAGE: string | null;
+  IS_READ: number | null;
+  LINK_URL: string | null;
+  METADATA_JSON: string | null;
+  CREATION_DATETIME: string | null;
+};
 
-    document.addEventListener("mousedown", handlePointerDown); // FIXED: Quick Actions dropdown
-    document.addEventListener("touchstart", handlePointerDown); // FIXED: Quick Actions dropdown
+function useClickOutside(
+  ref: RefObject<HTMLElement | null>,
+  onClickOutside: () => void
+) {
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        onClickOutside();
+      }
+    }
 
-    return () => { // FIXED: Quick Actions dropdown
-      document.removeEventListener("mousedown", handlePointerDown); // FIXED: Quick Actions dropdown
-      document.removeEventListener("touchstart", handlePointerDown); // FIXED: Quick Actions dropdown
-    }; // FIXED: Quick Actions dropdown
-  }, [onClickOutside, ref]); // FIXED: Quick Actions dropdown
-} // FIXED: Quick Actions dropdown
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [onClickOutside, ref]);
+}
+
+function relativeTime(value: string | null) {
+  if (!value) return "";
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function metadataOrderId(notification: BusinessNotification) {
+  try {
+    const metadata = JSON.parse(notification.METADATA_JSON || "{}") as {
+      orderId?: unknown;
+    };
+    return Number(metadata.orderId);
+  } catch {
+    return null;
+  }
+}
 
 export default function AdminHeader({
   businessId,
   mobileNavigation,
 }: AdminHeaderProps) {
   const pathname = usePathname();
-  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false); // FIXED: Quick Actions dropdown
-  const quickActionsRef = useRef<HTMLDivElement | null>(null); // FIXED: Quick Actions dropdown
+  const router = useRouter();
+  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<BusinessNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const knownNotificationIds = useRef<Set<number>>(new Set());
+  const didLoadNotifications = useRef(false);
+  const quickActionsRef = useRef<HTMLDivElement | null>(null);
   const basePath = `/dashboard/${businessId}`;
-  useClickOutside(quickActionsRef, () => setIsQuickActionsOpen(false)); // FIXED: Quick Actions dropdown
+  useClickOutside(quickActionsRef, () => setIsQuickActionsOpen(false));
+
+  const askNotificationPermission = useCallback(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      void Notification.requestPermission();
+    }
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
+    const response = await fetch(
+      `/api/dashboard/${businessId}/notifications?limit=20`
+    );
+    if (!response.ok) return;
+
+    const data = (await response.json()) as {
+      notifications: BusinessNotification[];
+      unreadCount: number;
+    };
+    const freshOrderNotifications = data.notifications.filter((notification) => {
+      const isKnown = knownNotificationIds.current.has(
+        notification.BUSINESS_NOTIFICATION_ID
+      );
+      return (
+        didLoadNotifications.current &&
+        !isKnown &&
+        notification.NOTIFICATION_TYPE === "order" &&
+        notification.TITLE === "New order received"
+      );
+    });
+
+    data.notifications.forEach((notification) => {
+      knownNotificationIds.current.add(notification.BUSINESS_NOTIFICATION_ID);
+    });
+    didLoadNotifications.current = true;
+    setNotifications(data.notifications);
+    setUnreadCount(data.unreadCount);
+
+    if ("Notification" in window && Notification.permission === "granted") {
+      freshOrderNotifications.forEach((notification) => {
+        const orderId = metadataOrderId(notification);
+        new Notification("New order received", {
+          body:
+            notification.MESSAGE ||
+            (orderId ? `Order #${orderId} is now preparing` : undefined),
+        });
+      });
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    askNotificationPermission();
+    void loadNotifications();
+    const interval = window.setInterval(loadNotifications, 30_000);
+    return () => window.clearInterval(interval);
+  }, [askNotificationPermission, loadNotifications]);
+
+  async function markRead(notification: BusinessNotification) {
+    await fetch(
+      `/api/dashboard/${businessId}/notifications/${notification.BUSINESS_NOTIFICATION_ID}/read`,
+      { method: "PATCH" }
+    );
+    await loadNotifications();
+    if (notification.LINK_URL) router.push(notification.LINK_URL);
+  }
+
+  async function markAllRead() {
+    await fetch(`/api/dashboard/${businessId}/notifications/read-all`, {
+      method: "PATCH",
+    });
+    await loadNotifications();
+  }
+
   const childSegments = pathname
     .replace(basePath, "")
     .split("/")
@@ -101,45 +225,107 @@ export default function AdminHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex size-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-950"
-            aria-label="Notifications"
-          >
-            <Bell className="size-5" />
-          </button>
-          <div className="relative" ref={quickActionsRef}> {/* FIXED: Quick Actions dropdown */}
+          <DropdownMenu onOpenChange={(open) => open && askNotificationPermission()}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="relative inline-flex size-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-950"
+                aria-label="Notifications"
+              >
+                <Bell className="size-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 text-xs font-semibold leading-5 text-white">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-0">
+              <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+                <DropdownMenuLabel className="px-0 py-0">
+                  Notifications
+                </DropdownMenuLabel>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-foodeez-primary hover:text-foodeez-secondary"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void markAllRead();
+                  }}
+                >
+                  Mark all as read
+                </button>
+              </div>
+              {notifications.length ? (
+                <div className="max-h-96 overflow-y-auto p-1">
+                  {notifications.map((notification) => (
+                    <DropdownMenuItem
+                      key={notification.BUSINESS_NOTIFICATION_ID}
+                      className="block cursor-pointer rounded-md p-3"
+                      onClick={() => void markRead(notification)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          {notification.NOTIFICATION_TYPE}
+                        </p>
+                        <span className="text-xs text-gray-400">
+                          {relativeTime(notification.CREATION_DATETIME)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-gray-950">
+                        {notification.TITLE}
+                      </p>
+                      {notification.MESSAGE && (
+                        <p className="mt-1 line-clamp-2 text-sm text-gray-500">
+                          {notification.MESSAGE}
+                        </p>
+                      )}
+                      {!notification.IS_READ && (
+                        <span className="mt-2 inline-block size-2 rounded-full bg-foodeez-primary" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+              ) : (
+                <p className="px-4 py-8 text-center text-sm text-gray-500">
+                  No notifications yet
+                </p>
+              )}
+              <DropdownMenuSeparator />
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="relative" ref={quickActionsRef}>
             <button
               type="button"
-              onClick={() => setIsQuickActionsOpen((open) => !open)} // FIXED: Quick Actions dropdown
+              onClick={() => setIsQuickActionsOpen((open) => !open)}
               className="inline-flex items-center gap-2 rounded-lg bg-foodeez-primary px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-foodeez-secondary"
-              aria-expanded={isQuickActionsOpen} // FIXED: Quick Actions dropdown
-              aria-haspopup="menu" // FIXED: Quick Actions dropdown
+              aria-expanded={isQuickActionsOpen}
+              aria-haspopup="menu"
             >
               <Plus className="size-4" />
               <span className="hidden sm:inline">Quick actions</span>
             </button>
-            {isQuickActionsOpen && ( // FIXED: Quick Actions dropdown
-              <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"> {/* FIXED: Quick Actions dropdown */}
-                <Link // FIXED: Quick Actions dropdown
-                  href={`${basePath}/menu/products/new`} // FIXED: Quick Actions dropdown
-                  onClick={() => setIsQuickActionsOpen(false)} // FIXED: Quick Actions dropdown
-                  className="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950" // FIXED: Quick Actions dropdown
-                > {/* FIXED: Quick Actions dropdown */}
+            {isQuickActionsOpen && (
+              <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                <Link
+                  href={`${basePath}/menu/products/new`}
+                  onClick={() => setIsQuickActionsOpen(false)}
+                  className="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950"
+                >
                   New Product
                 </Link>
-                <Link // FIXED: Quick Actions dropdown
-                  href={`${basePath}/menu/categories/new`} // FIXED: Quick Actions dropdown
-                  onClick={() => setIsQuickActionsOpen(false)} // FIXED: Quick Actions dropdown
-                  className="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950" // FIXED: Quick Actions dropdown
-                > {/* FIXED: Quick Actions dropdown */}
+                <Link
+                  href={`${basePath}/menu/categories/new`}
+                  onClick={() => setIsQuickActionsOpen(false)}
+                  className="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950"
+                >
                   New Category
                 </Link>
-                <Link // FIXED: Quick Actions dropdown
-                  href={`${basePath}/orders`} // FIXED: Quick Actions dropdown
-                  onClick={() => setIsQuickActionsOpen(false)} // FIXED: Quick Actions dropdown
-                  className="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950" // FIXED: Quick Actions dropdown
-                > {/* FIXED: Quick Actions dropdown */}
+                <Link
+                  href={`${basePath}/orders`}
+                  onClick={() => setIsQuickActionsOpen(false)}
+                  className="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950"
+                >
                   View Orders
                 </Link>
               </div>

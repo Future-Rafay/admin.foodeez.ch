@@ -44,19 +44,21 @@ function formatDateTime(value: string | null) {
 }
 
 function statusClasses(status: string) {
-  if (status === "new") return "border-yellow-200 bg-yellow-50 text-yellow-800";
   if (status === "preparing") return "border-blue-200 bg-blue-50 text-blue-700";
-  if (status === "ready") return "border-purple-200 bg-purple-50 text-purple-700";
+  if (status === "out_for_delivery") return "border-purple-200 bg-purple-50 text-purple-700";
+  if (status === "ready_for_pickup") return "border-purple-200 bg-purple-50 text-purple-700";
   if (status === "delivered") return "border-green-200 bg-green-50 text-green-700";
+  if (status === "picked_up") return "border-green-200 bg-green-50 text-green-700";
   if (status === "rejected") return "border-red-200 bg-red-50 text-red-700";
   return "border-gray-200 bg-gray-50 text-gray-600";
 }
 
 function statusLabel(status: string) {
-  if (status === "new") return "New";
   if (status === "preparing") return "Preparing";
-  if (status === "ready") return "Ready";
+  if (status === "out_for_delivery") return "Out for delivery";
+  if (status === "ready_for_pickup") return "Ready for pickup";
   if (status === "delivered") return "Delivered";
+  if (status === "picked_up") return "Picked up";
   if (status === "rejected") return "Rejected";
   return "Unknown";
 }

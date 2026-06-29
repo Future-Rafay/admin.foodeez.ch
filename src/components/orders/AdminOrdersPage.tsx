@@ -32,6 +32,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -48,10 +50,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  getAllowedOrderActions,
+  getOrderStatusBadgeColor,
+  getOrderStatusLabel,
+  getPaymentStatusLabel,
+  isStripePaidOrder,
+  normalizeOrderType,
+} from "@/lib/orderStatus";
 import { cn } from "@/lib/utils";
 import type {
   AdminOrderRow,
   NormalizedOrderStatus,
+  OrderPrepDefaults,
   OrdersKpis,
 } from "@/services/orders-management";
 
@@ -61,17 +73,24 @@ type OrdersResponse = {
   page: number;
   totalPages: number;
   kpi: OrdersKpis;
+  prepDefaults: OrderPrepDefaults;
 };
 
 type StatusFilter = "all" | NormalizedOrderStatus;
 type DateRangeFilter = "all" | "today" | "last7" | "custom";
-type OrderAction = {
-  label: string;
-  status: NormalizedOrderStatus;
-  variant?: "destructive";
-};
 
 const PAGE_SIZE = 20;
+
+const REJECTION_REASONS = [
+  "Restaurant is closed",
+  "Item unavailable",
+  "Too busy right now",
+  "Delivery area not serviceable",
+  "Customer address issue",
+  "Payment issue",
+  "Duplicate order",
+  "Other",
+];
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -88,10 +107,11 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
 
 const statusOptions: { label: string; value: StatusFilter }[] = [
   { label: "All", value: "all" },
-  { label: "New/Pending", value: "new" },
   { label: "Preparing", value: "preparing" },
-  { label: "Ready", value: "ready" },
+  { label: "Out for delivery", value: "out_for_delivery" },
+  { label: "Ready for pickup", value: "ready_for_pickup" },
   { label: "Delivered", value: "delivered" },
+  { label: "Picked up", value: "picked_up" },
   { label: "Rejected", value: "rejected" },
 ];
 
@@ -138,59 +158,20 @@ function itemsSummary(order: AdminOrderRow) {
   return `${order.item_count} ${order.item_count === 1 ? "item" : "items"}`;
 }
 
-function statusLabel(status: NormalizedOrderStatus) {
-  const labels: Record<NormalizedOrderStatus, string> = {
-    pending: "Pending",
-    new: "New",
-    preparing: "Preparing",
-    ready: "Ready",
-    delivered: "Delivered",
-    rejected: "Rejected",
-  };
-
-  return labels[status];
-}
-
-function statusBadgeClass(status: NormalizedOrderStatus) {
-  if (status === "new" || status === "pending") {
-    return "border-yellow-200 bg-yellow-50 text-yellow-800";
-  }
-
-  const classes: Record<
-    Exclude<NormalizedOrderStatus, "new" | "pending">,
-    string
-  > = {
-    preparing: "border-blue-200 bg-blue-50 text-blue-700",
-    ready: "border-purple-200 bg-purple-50 text-purple-700",
-    delivered: "border-green-200 bg-green-50 text-green-700",
-    rejected: "border-red-200 bg-red-50 text-red-700",
-  };
-
-  return classes[status];
-}
-
 function formatDateTime(value: string | null) {
   if (!value) return "Not available";
   return dateTimeFormatter.format(new Date(value));
 }
 
-function getOrderActions(status: NormalizedOrderStatus): OrderAction[] {
-  if (status === "new" || status === "pending") {
-    return [
-      { label: "Accept -> Preparing", status: "preparing" as const },
-      { label: "Reject", status: "rejected" as const, variant: "destructive" },
-    ];
-  }
+function formatDatetimeLocal(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
 
-  if (status === "preparing") {
-    return [{ label: "Mark Ready", status: "ready" as const }];
-  }
-
-  if (status === "ready") {
-    return [{ label: "Mark Delivered", status: "delivered" as const }];
-  }
-
-  return [];
+function etaLabel(order: AdminOrderRow) {
+  return order.ORDER_TYPE === "pickup"
+    ? "Estimated pickup time"
+    : "Estimated delivery time";
 }
 
 export default function AdminOrdersPage({ businessId }: { businessId: number }) {
@@ -198,9 +179,16 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
   const [kpi, setKpi] = useState<OrdersKpis>({
     new: 0,
     preparing: 0,
-    ready: 0,
+    out_for_delivery: 0,
+    ready_for_pickup: 0,
     delivered: 0,
+    picked_up: 0,
+    rejected: 0,
     revenue_today: 0,
+  });
+  const [prepDefaults, setPrepDefaults] = useState<OrderPrepDefaults>({
+    defaultPickupPrepMinutes: 20,
+    defaultDeliveryPrepMinutes: 45,
   });
   const [status, setStatus] = useState<StatusFilter>("all");
   const [dateRange, setDateRange] = useState<DateRangeFilter>("all");
@@ -212,8 +200,19 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isSavingEta, setIsSavingEta] = useState(false);
   const [error, setError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<AdminOrderRow | null>(null);
+  const [rejectOrder, setRejectOrder] = useState<AdminOrderRow | null>(null);
+  const [rejectionReason, setRejectionReason] = useState(REJECTION_REASONS[0]);
+  const [rejectionNote, setRejectionNote] = useState("");
+  const [etaValue, setEtaValue] = useState("");
+  const [soundBlocked, setSoundBlocked] = useState(false);
+
+  useEffect(() => {
+    const orderId = new URLSearchParams(window.location.search).get("orderId");
+    if (orderId) setSearch(orderId);
+  }, []);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({
@@ -233,8 +232,8 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
   }, [dateFrom, dateRange, dateTo, page, search, status]);
 
   const loadOrders = useCallback(
-    async (signal?: AbortSignal) => {
-      setIsLoading(true);
+    async (signal?: AbortSignal, showLoading = true) => {
+      if (showLoading) setIsLoading(true);
       setError("");
 
       try {
@@ -251,13 +250,14 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
         const data = (await response.json()) as OrdersResponse;
         setOrders(data.orders);
         setKpi(data.kpi);
+        setPrepDefaults(data.prepDefaults);
         setTotalPages(data.totalPages);
         setTotalCount(data.totalCount);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setError(error instanceof Error ? error.message : "Failed to load orders");
       } finally {
-        setIsLoading(false);
+        if (showLoading) setIsLoading(false);
       }
     },
     [businessId, queryString]
@@ -270,12 +270,71 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
   }, [loadOrders]);
 
   useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadOrders(undefined, false);
+    }, 30_000);
+
+    return () => window.clearInterval(interval);
+  }, [loadOrders]);
+
+  useEffect(() => {
     setPage(1);
   }, [dateFrom, dateRange, dateTo, search, status]);
 
+  const etaOrder = orders.find(
+    (order) =>
+      order.ORDER_STATUS === 1 &&
+      !order.ETA_ACKNOWLEDGED_DATETIME &&
+      order.status === "preparing"
+  );
+
+  useEffect(() => {
+    if (!etaOrder) return;
+    const minutes =
+      etaOrder.ORDER_TYPE === "pickup"
+        ? prepDefaults.defaultPickupPrepMinutes
+        : prepDefaults.defaultDeliveryPrepMinutes;
+    const date = new Date();
+    date.setMinutes(date.getMinutes() + minutes);
+    setEtaValue(formatDatetimeLocal(date));
+  }, [etaOrder, prepDefaults]);
+
+  const playBeep = useCallback(async () => {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const context = new AudioContextClass();
+    await context.resume();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 880;
+    gain.gain.value = 0.08;
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.2);
+    window.setTimeout(() => void context.close(), 300);
+    setSoundBlocked(false);
+  }, []);
+
+  useEffect(() => {
+    if (!etaOrder) return;
+
+    void playBeep().catch(() => setSoundBlocked(true));
+    const interval = window.setInterval(() => {
+      void playBeep().catch(() => setSoundBlocked(true));
+    }, 10_000);
+
+    return () => window.clearInterval(interval);
+  }, [etaOrder, playBeep]);
+
   async function updateStatus(
     order: AdminOrderRow,
-    nextStatus: NormalizedOrderStatus
+    nextStatus: NormalizedOrderStatus,
+    rejection?: { rejectionReason: string; rejectionNote: string }
   ) {
     setIsUpdating(true);
     setError("");
@@ -286,7 +345,7 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: nextStatus }),
+          body: JSON.stringify({ status: nextStatus, ...rejection }),
         }
       );
 
@@ -311,28 +370,95 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
     }
   }
 
+  async function saveEta() {
+    if (!etaOrder) return;
+
+    setIsSavingEta(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/dashboard/${businessId}/orders/${etaOrder.BUSINESS_ORDER_ID}/eta`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eta: etaValue }),
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Failed to update ETA");
+      }
+
+      await loadOrders();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to update ETA");
+    } finally {
+      setIsSavingEta(false);
+    }
+  }
+
+  async function confirmReject() {
+    if (!rejectOrder) return;
+
+    if (isStripePaidOrder(rejectOrder)) {
+      setIsUpdating(true);
+      setError("");
+
+      try {
+        const response = await fetch(
+          `/api/dashboard/${businessId}/orders/${rejectOrder.BUSINESS_ORDER_ID}/refund`,
+          { method: "POST" }
+        );
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Refund failed");
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Refund failed");
+      } finally {
+        setIsUpdating(false);
+      }
+
+      return;
+    }
+
+    await updateStatus(rejectOrder, "rejected", {
+      rejectionReason,
+      rejectionNote,
+    });
+    setRejectOrder(null);
+    setRejectionReason(REJECTION_REASONS[0]);
+    setRejectionNote("");
+  }
+
   const kpiCards = [
-    {
-      label: "New/Pending",
-      value: kpi.new,
-      icon: Clock3,
-      className: "bg-yellow-50 text-yellow-800",
-    },
     {
       label: "Preparing",
       value: kpi.preparing,
-      icon: PackageCheck,
+      icon: Clock3,
       className: "bg-blue-50 text-blue-700",
     },
     {
-      label: "Ready",
-      value: kpi.ready,
+      label: "Out for delivery",
+      value: kpi.out_for_delivery,
+      icon: PackageCheck,
+      className: "bg-purple-50 text-purple-700",
+    },
+    {
+      label: "Ready for pickup",
+      value: kpi.ready_for_pickup,
       icon: CheckCircle2,
       className: "bg-purple-50 text-purple-700",
     },
     {
       label: "Delivered",
       value: kpi.delivered,
+      icon: CheckCircle2,
+      className: "bg-green-50 text-green-700",
+    },
+    {
+      label: "Picked up",
+      value: kpi.picked_up,
       icon: CheckCircle2,
       className: "bg-green-50 text-green-700",
     },
@@ -346,7 +472,7 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
 
   return (
     <div className="space-y-5">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         {kpiCards.map((card) => {
           const Icon = card.icon;
 
@@ -490,7 +616,7 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
                         </TableCell>
                         <TableCell>{order.PAYMENT_MODE || "Not set"}</TableCell>
                         <TableCell>
-                          <StatusBadge status={order.status} />
+                          <StatusBadge order={order} />
                         </TableCell>
                         <TableCell className="text-gray-500">
                           {formatDateTime(order.CREATION_DATETIME)}
@@ -504,7 +630,7 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56">
-                              {getOrderActions(order.status).map((action) => (
+                              {getAllowedOrderActions(order).map((action) => (
                                 <DropdownMenuItem
                                   key={action.status}
                                   disabled={isUpdating}
@@ -512,12 +638,19 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
                                     action.variant === "destructive" &&
                                       "text-red-600 focus:text-red-700"
                                   )}
-                                  onClick={() => updateStatus(order, action.status)}
+                                  onClick={() => {
+                                    if (action.status === "rejected") {
+                                      setRejectOrder(order);
+                                      return;
+                                    }
+
+                                    void updateStatus(order, action.status);
+                                  }}
                                 >
                                   {action.label}
                                 </DropdownMenuItem>
                               ))}
-                              {getOrderActions(order.status).length > 0 && (
+                              {getAllowedOrderActions(order).length > 0 && (
                                 <div className="my-1 h-px bg-gray-100" />
                               )}
                               <DropdownMenuItem
@@ -582,15 +715,35 @@ export default function AdminOrdersPage({ businessId }: { businessId: number }) 
         isUpdating={isUpdating}
         onClose={() => setSelectedOrder(null)}
         onUpdateStatus={updateStatus}
+        onReject={(order) => setRejectOrder(order)}
+      />
+      <EtaModal
+        order={etaOrder || null}
+        etaValue={etaValue}
+        isSaving={isSavingEta}
+        soundBlocked={soundBlocked}
+        onEtaChange={setEtaValue}
+        onSave={() => void saveEta()}
+        onEnableSound={() => void playBeep()}
+      />
+      <RejectOrderModal
+        order={rejectOrder}
+        isUpdating={isUpdating}
+        reason={rejectionReason}
+        note={rejectionNote}
+        onReasonChange={setRejectionReason}
+        onNoteChange={setRejectionNote}
+        onClose={() => setRejectOrder(null)}
+        onConfirm={() => void confirmReject()}
       />
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: NormalizedOrderStatus }) {
+function StatusBadge({ order }: { order: AdminOrderRow }) {
   return (
-    <Badge variant="outline" className={cn("capitalize", statusBadgeClass(status))}>
-      {statusLabel(status)}
+    <Badge variant="outline" className={getOrderStatusBadgeColor(order)}>
+      {getOrderStatusLabel(order)}
     </Badge>
   );
 }
@@ -664,11 +817,150 @@ function MoneyLine({
   );
 }
 
+function EtaModal({
+  order,
+  etaValue,
+  isSaving,
+  soundBlocked,
+  onEtaChange,
+  onSave,
+  onEnableSound,
+}: {
+  order: AdminOrderRow | null;
+  etaValue: string;
+  isSaving: boolean;
+  soundBlocked: boolean;
+  onEtaChange: (value: string) => void;
+  onSave: () => void;
+  onEnableSound: () => void;
+}) {
+  if (!order) return null;
+
+  return (
+    <Dialog open>
+      <DialogContent showCloseButton={false} className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {order.ORDER_TYPE === "pickup"
+              ? "Set estimated pickup time"
+              : "Set estimated delivery time"}
+          </DialogTitle>
+          <DialogDescription>
+            Set an ETA before continuing with this order.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2">
+          <Label htmlFor="eta">{etaLabel(order)}</Label>
+          <Input
+            id="eta"
+            type="datetime-local"
+            value={etaValue}
+            onChange={(event) => onEtaChange(event.target.value)}
+          />
+          {soundBlocked && (
+            <Button type="button" variant="outline" onClick={onEnableSound}>
+              Enable sound alerts
+            </Button>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            onClick={onSave}
+            disabled={isSaving || !etaValue}
+            className="bg-foodeez-primary text-white hover:bg-foodeez-secondary"
+          >
+            {isSaving ? "Saving..." : "Save ETA"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RejectOrderModal({
+  order,
+  isUpdating,
+  reason,
+  note,
+  onReasonChange,
+  onNoteChange,
+  onClose,
+  onConfirm,
+}: {
+  order: AdminOrderRow | null;
+  isUpdating: boolean;
+  reason: string;
+  note: string;
+  onReasonChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!order) return null;
+
+  return (
+    <Dialog open={Boolean(order)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Reject order #{order.BUSINESS_ORDER_ID}</DialogTitle>
+          <DialogDescription>
+            Choose a reason. Stripe/card paid orders must be refunded first.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isStripePaidOrder(order) && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            This order is card paid. Admin refunds are not implemented yet, so
+            rejection will stop at the refund placeholder.
+          </p>
+        )}
+
+        <RadioGroup value={reason} onValueChange={onReasonChange}>
+          {REJECTION_REASONS.map((item) => (
+            <div key={item} className="flex items-center gap-2">
+              <RadioGroupItem id={`reject-${item}`} value={item} />
+              <Label htmlFor={`reject-${item}`} className="text-sm">
+                {item}
+              </Label>
+            </div>
+          ))}
+        </RadioGroup>
+
+        <div className="space-y-2">
+          <Label htmlFor="rejectionNote">Optional note</Label>
+          <Textarea
+            id="rejectionNote"
+            value={note}
+            onChange={(event) => onNoteChange(event.target.value)}
+            rows={3}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isUpdating}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={isUpdating || !reason}
+          >
+            {isUpdating ? "Rejecting..." : "Reject order"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function OrderDetailsModal({
   order,
   isUpdating,
   onClose,
   onUpdateStatus,
+  onReject,
 }: {
   order: AdminOrderRow | null;
   isUpdating: boolean;
@@ -677,12 +969,13 @@ function OrderDetailsModal({
     order: AdminOrderRow,
     status: NormalizedOrderStatus
   ) => Promise<void>;
+  onReject: (order: AdminOrderRow) => void;
 }) {
   if (!order) return null;
 
-  const actions = getOrderActions(order.status);
+  const actions = getAllowedOrderActions(order);
   const isRejected = order.status === "rejected";
-  const isCompleted = order.status === "delivered";
+  const isCompleted = order.status === "delivered" || order.status === "picked_up";
 
   return (
     <Dialog open={Boolean(order)} onOpenChange={(open) => !open && onClose()}>
@@ -700,21 +993,41 @@ function OrderDetailsModal({
               <h3 className="text-sm font-semibold text-gray-950">
                 Order #{order.BUSINESS_ORDER_ID}
               </h3>
-              <StatusBadge status={order.status} />
+              <StatusBadge order={order} />
             </div>
             <div className="space-y-2">
+              <DetailLine
+                label="Order type"
+                value={normalizeOrderType(order.ORDER_TYPE) === "pickup" ? "Pickup" : "Delivery"}
+              />
               <DetailLine
                 label="Placed at"
                 value={formatDateTime(order.CREATION_DATETIME)}
               />
               <DetailLine
-                label="Est. Delivery"
+                label={etaLabel(order)}
                 value={formatDateTime(order.DELIVERY_ET)}
               />
               <DetailLine
                 label="Payment"
                 value={order.PAYMENT_MODE || "Not set"}
               />
+              <DetailLine
+                label="Payment status"
+                value={getPaymentStatusLabel(order.PAYMENT_DONE)}
+              />
+              {isRejected && order.ORDER_REJECTION_REASON && (
+                <DetailLine
+                  label="Rejection reason"
+                  value={order.ORDER_REJECTION_REASON}
+                />
+              )}
+              {isRejected && order.ORDER_REJECTION_NOTE && (
+                <DetailLine
+                  label="Rejection note"
+                  value={order.ORDER_REJECTION_NOTE}
+                />
+              )}
               {order.STAFF_MEMBER && (
                 <DetailLine label="Staff" value={order.STAFF_MEMBER} />
               )}
@@ -728,7 +1041,11 @@ function OrderDetailsModal({
                   key={action.status}
                   disabled={isUpdating}
                   variant={action.variant === "destructive" ? "destructive" : "default"}
-                  onClick={() => onUpdateStatus(order, action.status)}
+                  onClick={() =>
+                    action.status === "rejected"
+                      ? onReject(order)
+                      : onUpdateStatus(order, action.status)
+                  }
                   className={cn(
                     action.variant !== "destructive" &&
                       "bg-foodeez-primary text-white hover:bg-foodeez-secondary"

@@ -9,10 +9,11 @@ type OrderStatusRouteContext = {
 };
 
 const allowedStatuses: OrderStatus[] = [
-  "preparing",
-  "ready",
+  "out_for_delivery",
   "delivered",
   "rejected",
+  "ready_for_pickup",
+  "picked_up",
 ];
 
 function errorResponse(error: unknown) {
@@ -38,6 +39,23 @@ function errorResponse(error: unknown) {
 
     if (error.message === "Invalid route params") {
       return NextResponse.json({ error: "Invalid route params" }, { status: 400 });
+    }
+
+    if (error.message === "Rejection reason is required") {
+      return NextResponse.json(
+        { error: "Rejection reason is required" },
+        { status: 400 }
+      );
+    }
+
+    if (error.message === "Stripe refund required before rejection") {
+      return NextResponse.json(
+        {
+          error:
+            "Stripe refund is not implemented in admin yet because STRIPE_PAYMENT_INTENT_ID is not stored.",
+        },
+        { status: 409 }
+      );
     }
   }
 
@@ -68,7 +86,10 @@ export async function PATCH(
   }
 
   try {
-    const order = await updateOrderStatus(businessId, orderId, status);
+    const order = await updateOrderStatus(businessId, orderId, status, {
+      rejectionReason: body?.rejectionReason,
+      rejectionNote: body?.rejectionNote,
+    });
     return NextResponse.json(order);
   } catch (error) {
     return errorResponse(error);

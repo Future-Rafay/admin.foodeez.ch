@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { normalizeOrderStatus, type OrderStatusName } from "@/lib/orderStatus";
 import prisma from "@/lib/prisma";
 import { S3Storage } from "@/lib/s3-storage";
 
@@ -30,13 +31,7 @@ export type RecentOrderRow = {
   customer: string;
   items: number;
   total: number;
-  status:
-    | "new"
-    | "preparing"
-    | "ready"
-    | "delivered"
-    | "rejected"
-    | "unknown";
+  status: OrderStatusName;
   createdAt: string | null;
 };
 
@@ -80,15 +75,6 @@ function toNumber(value: unknown) {
 function formatCustomer(firstName?: string | null, lastName?: string | null) {
   const name = [firstName, lastName].filter(Boolean).join(" ").trim();
   return name || "Guest customer";
-}
-
-function mapOrderStatus(status?: number | null): RecentOrderRow["status"] {
-  if (status === 1) return "new";
-  if (status === 2) return "preparing";
-  if (status === 3) return "ready";
-  if (status === 4) return "delivered";
-  if (status === 0) return "rejected";
-  return "unknown";
 }
 
 async function getVisitorAccountId() {
@@ -206,8 +192,11 @@ export async function getBusinessDashboardData(businessId: number) {
       (total, order) => total + toNumber(order.ORDER_FINAL_AMOUNT),
       0
     ),
-    pendingOrders: orders.filter((order) =>
-      [1, 2, 3].includes(Number(order.ORDER_STATUS))
+    pendingOrders: orders.filter(
+      (order) =>
+        !["delivered", "picked_up", "rejected"].includes(
+          normalizeOrderStatus(order.ORDER_STATUS)
+        )
     ).length,
     activeProducts: products.filter((product) => product.STATUS === 1).length,
   };
@@ -221,7 +210,7 @@ export async function getBusinessDashboardData(businessId: number) {
         .filter((detail) => detail.BUSINESS_ORDER_ID === order.BUSINESS_ORDER_ID)
         .reduce((total, detail) => total + (detail.ORDER_QUANTITY || 0), 0),
       total: toNumber(order.ORDER_FINAL_AMOUNT),
-      status: mapOrderStatus(order.ORDER_STATUS),
+      status: normalizeOrderStatus(order.ORDER_STATUS),
       createdAt: order.CREATION_DATETIME?.toISOString() || null,
     })),
   };
