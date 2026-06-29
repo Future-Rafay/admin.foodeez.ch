@@ -1,7 +1,7 @@
 import AdminSettingsForm from "@/components/settings/AdminSettingsForm";
 import {
-  getBusinessInfo,
   getBusinessSettings,
+  getFulfillmentSettings,
 } from "@/services/settings-management";
 import { notFound, redirect } from "next/navigation";
 
@@ -18,16 +18,16 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
   }
 
   try {
-    const [businessInfo, settings] = await Promise.all([
-      getBusinessInfo(businessId),
+    const [settings, fulfillmentSettings] = await Promise.all([
       getBusinessSettings(businessId),
+      getFulfillmentSettings(businessId),
     ]);
 
     return (
       <AdminSettingsForm
         businessId={businessId}
-        businessInfo={businessInfo}
         initialDeliveryAreas={settings?.deliveryAreas || ""}
+        initialFulfillmentSettings={fulfillmentSettings}
       />
     );
   } catch (error) {
