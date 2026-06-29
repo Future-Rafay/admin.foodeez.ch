@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
+  ImageIcon,
   MoreHorizontal,
   PackageOpen,
   Pencil,
@@ -14,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -53,6 +55,7 @@ import {
   saveProduct,
   toggleProductStatus,
 } from "@/services/admin-data";
+import { resolveMediaUrl } from "@/lib/media";
 import { cn } from "@/lib/utils";
 
 type SortKey = "name" | "categoryName" | "price" | "stock" | "status";
@@ -288,7 +291,7 @@ export default function AdminProductsTable({
               <TableHeader>
                 <TableRow className="bg-gray-50 hover:bg-gray-50">
                   <SortableHead
-                    label="Name"
+                    label="Product"
                     sortKey="name"
                     activeKey={sortKey}
                     direction={sortDirection}
@@ -329,15 +332,18 @@ export default function AdminProductsTable({
                 {paginatedProducts.map((product) => (
                   <TableRow key={product.id} className="hover:bg-gray-50">
                     <TableCell className="min-w-[220px]">
-                      <div>
-                        <p className="font-medium text-gray-950">
-                          {product.name}
-                        </p>
-                        {product.description && (
-                          <p className="mt-1 max-w-xs truncate text-sm text-gray-500">
-                            {product.description}
+                      <div className="flex items-center gap-3">
+                        <ProductThumbnail product={product} />
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-950">
+                            {product.name}
                           </p>
-                        )}
+                          {product.description && (
+                            <p className="mt-1 max-w-xs truncate text-sm text-gray-500">
+                              {product.description}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>{product.categoryName}</TableCell>
@@ -510,6 +516,25 @@ export default function AdminProductsTable({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function ProductThumbnail({ product }: { product: AdminProductRow }) {
+  const imageUrl = resolveMediaUrl(product.imageUrl);
+
+  return (
+    <Avatar className="size-12 rounded-full border border-gray-200 bg-gray-100">
+      {imageUrl && (
+        <AvatarImage
+          src={imageUrl}
+          alt={product.name}
+          className="rounded-lg object-cover"
+        />
+      )}
+      <AvatarFallback className="rounded-lg bg-gray-100 text-gray-400">
+        <ImageIcon className="size-5" />
+      </AvatarFallback>
+    </Avatar>
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -38,9 +38,15 @@ export default function ImageUploadField({
 }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const displaySrc =
     previewUrl || resolveMediaUrl(value) || null;
+  const showImage = displaySrc && !imageError;
+
+  useEffect(() => {
+    setImageError(false);
+  }, [displaySrc]);
 
   const handleFile = useCallback(
     (file: File | null) => {
@@ -114,7 +120,7 @@ export default function ImageUploadField({
           disabled={disabled || uploading}
         />
 
-        {displaySrc ? (
+        {showImage ? (
           <div className="flex flex-col sm:flex-row items-center gap-4 p-4">
             <div className="relative w-32 h-32 rounded-lg overflow-hidden border shadow-sm flex-shrink-0">
               <Image
@@ -122,6 +128,7 @@ export default function ImageUploadField({
                 alt="Preview"
                 fill
                 className="w-full h-full object-cover"
+                onError={() => setImageError(true)}
               />
             </div>
             <div className="flex-1 text-center sm:text-left space-y-2">
@@ -171,10 +178,14 @@ export default function ImageUploadField({
               <ImageIcon className="w-7 h-7 text-gray-400" />
             </div>
             <p className="text-sm font-medium text-gray-700">
-              Drop an image here or click to browse
+              {value.trim()
+                ? "Image preview unavailable"
+                : "Drop an image here or click to browse"}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              PNG, JPG, WebP, GIF · max {formatFileSize(MAX_UPLOAD_SIZE_BYTES)}
+              {value.trim()
+                ? "Check the image URL or paste a different one."
+                : `PNG, JPG, WebP, GIF · max ${formatFileSize(MAX_UPLOAD_SIZE_BYTES)}`}
             </p>
           </div>
         )}
