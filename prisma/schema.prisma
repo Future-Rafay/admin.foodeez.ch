@@ -22,36 +22,37 @@ model adlinks {
 }
 
 model business {
-  BUSINESS_ID        Int                @id @default(autoincrement())
-  CREATION_DATETIME  DateTime           @db.DateTime(0)
-  PLACE_ID           String?            @db.VarChar(100)
-  BUSINESS_NAME      String?            @db.VarChar(255)
-  SHORT_NAME         String?            @db.VarChar(20)
-  DESCRIPTION        String?            @db.VarChar(1000)
-  ADDRESS_STREET     String?            @db.VarChar(100)
-  ADDRESS_ZIP        BigInt?
-  ADDRESS_CITY_ID    Int?
-  ADDRESS_TOWN       String?            @db.VarChar(100)
-  ADDRESS_COUNTRY    String?            @db.VarChar(100)
-  PHONE_NUMBER       String?            @db.VarChar(45)
-  PHONE_NUMBER_SHORT String?            @db.VarChar(45)
-  EMAIL_ADDRESS      String?            @db.VarChar(255)
-  WHATSAPP_NUMBER    String?            @db.VarChar(45)
-  WEB_ADDRESS        String?            @db.VarChar(1000)
-  LOGO               String?            @db.VarChar(255)
-  FACEBOOK_LINK      String?            @db.VarChar(1000)
-  INSTA_LINK         String?            @db.VarChar(1000)
-  TIKTOK_LINK        String?            @db.VarChar(1000)
-  GOOGLE_PROFILE     String?            @db.VarChar(1000)
-  IMAGE_URL          String?            @db.VarChar(1000)
-  GOOGLE_RATING      String?            @db.VarChar(10)
-  WHATSAPP_LINK      String?            @db.VarChar(255)
-  LATITUDE           Float?             @default(0)
-  LONGITUDE          Float?             @default(0)
-  APPROVED           Int?               @default(0) @db.TinyInt
-  STATUS             Int?               @default(0) @db.TinyInt
-  business_product   business_product[]
-  business_settings  business_settings?
+  BUSINESS_ID           Int                     @id @default(autoincrement())
+  CREATION_DATETIME     DateTime                @db.DateTime(0)
+  PLACE_ID              String?                 @db.VarChar(100)
+  BUSINESS_NAME         String?                 @db.VarChar(255)
+  SHORT_NAME            String?                 @db.VarChar(20)
+  DESCRIPTION           String?                 @db.VarChar(1000)
+  ADDRESS_STREET        String?                 @db.VarChar(100)
+  ADDRESS_ZIP           BigInt?
+  ADDRESS_CITY_ID       Int?
+  ADDRESS_TOWN          String?                 @db.VarChar(100)
+  ADDRESS_COUNTRY       String?                 @db.VarChar(100)
+  PHONE_NUMBER          String?                 @db.VarChar(45)
+  PHONE_NUMBER_SHORT    String?                 @db.VarChar(45)
+  EMAIL_ADDRESS         String?                 @db.VarChar(255)
+  WHATSAPP_NUMBER       String?                 @db.VarChar(45)
+  WEB_ADDRESS           String?                 @db.VarChar(1000)
+  LOGO                  String?                 @db.VarChar(255)
+  FACEBOOK_LINK         String?                 @db.VarChar(1000)
+  INSTA_LINK            String?                 @db.VarChar(1000)
+  TIKTOK_LINK           String?                 @db.VarChar(1000)
+  GOOGLE_PROFILE        String?                 @db.VarChar(1000)
+  IMAGE_URL             String?                 @db.VarChar(1000)
+  GOOGLE_RATING         String?                 @db.VarChar(10)
+  WHATSAPP_LINK         String?                 @db.VarChar(255)
+  LATITUDE              Float?                  @default(0)
+  LONGITUDE             Float?                  @default(0)
+  APPROVED              Int?                    @default(0) @db.TinyInt
+  STATUS                Int?                    @default(0) @db.TinyInt
+  business_notification business_notification[]
+  business_product      business_product[]
+  business_settings     business_settings?
 }
 
 model business_2_business_category {
@@ -261,33 +262,38 @@ model business_food_menu_card_detail {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model business_order {
-  BUSINESS_ORDER_ID     Int       @id
-  CREATION_DATETIME     DateTime? @db.DateTime(0)
-  BUSINESS_ID           Int?
-  VISITOR_ID            Int?      @default(0)
-  PAYMENT_DONE          Int?      @default(1) @db.TinyInt
-  PAYMENT_MODE          String?   @db.VarChar(45)
-  DELIVERY_ET           DateTime? @db.DateTime(0)
-  ORDER_STATUS          Int?      @default(1)
-  DELIVERY_DATETIME     DateTime? @db.DateTime(0)
-  TERMINAL              String?   @db.VarChar(100)
-  STAFF_MEMBER          String?   @db.VarChar(100)
-  FIRST_NAME            String?   @db.VarChar(100)
-  LAST_NAME             String?   @db.VarChar(100)
-  ADDRESS_STREET        String?   @db.VarChar(100)
-  ADDRESS_ZIP           String?   @db.VarChar(10)
-  ADDRESS_TOWN          String?   @db.VarChar(100)
-  ADDRESS_COUNTRY_CODE  String?   @default("CH") @db.VarChar(45)
-  PHONE_NUMBER          String?   @db.VarChar(20)
-  EMAIL_ADDRESS         String?   @db.VarChar(255)
-  ORDER_GROSS_AMOUNT    Decimal?  @default(0.00) @db.Decimal(8, 2)
-  ORDER_TAX_AMOUNT      Decimal?  @default(0.00) @db.Decimal(8, 2)
-  ORDER_NET_AMOUNT      Decimal?  @default(0.00) @db.Decimal(8, 2)
-  ORDER_DISCOUNT_AMOUNT Decimal?  @default(0.00) @db.Decimal(8, 2)
-  ORDER_AMOUNT          Decimal?  @default(0.00) @db.Decimal(8, 2)
-  SHIPPING_CHARGES      Decimal?  @default(0.00) @db.Decimal(8, 2)
-  ORDER_REFUND_AMOUNT   Decimal?  @default(0.00) @db.Decimal(8, 2)
-  ORDER_FINAL_AMOUNT    Decimal?  @default(0.00) @db.Decimal(8, 2)
+  BUSINESS_ORDER_ID         Int       @id
+  CREATION_DATETIME         DateTime? @db.DateTime(0)
+  BUSINESS_ID               Int?
+  VISITOR_ID                Int?      @default(0)
+  PAYMENT_DONE              Int?      @default(1) @db.TinyInt
+  PAYMENT_MODE              String?   @db.VarChar(45)
+  DELIVERY_ET               DateTime? @db.DateTime(0)
+  ORDER_STATUS              Int?      @default(1)
+  DELIVERY_DATETIME         DateTime? @db.DateTime(0)
+  TERMINAL                  String?   @db.VarChar(100)
+  STAFF_MEMBER              String?   @db.VarChar(100)
+  FIRST_NAME                String?   @db.VarChar(100)
+  LAST_NAME                 String?   @db.VarChar(100)
+  ADDRESS_STREET            String?   @db.VarChar(100)
+  ADDRESS_ZIP               String?   @db.VarChar(10)
+  ADDRESS_TOWN              String?   @db.VarChar(100)
+  ADDRESS_COUNTRY_CODE      String?   @default("CH") @db.VarChar(45)
+  PHONE_NUMBER              String?   @db.VarChar(20)
+  EMAIL_ADDRESS             String?   @db.VarChar(255)
+  ORDER_GROSS_AMOUNT        Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_TAX_AMOUNT          Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_NET_AMOUNT          Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_DISCOUNT_AMOUNT     Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_AMOUNT              Decimal?  @default(0.00) @db.Decimal(8, 2)
+  SHIPPING_CHARGES          Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_REFUND_AMOUNT       Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_FINAL_AMOUNT        Decimal?  @default(0.00) @db.Decimal(8, 2)
+  ORDER_TYPE                String    @default("delivery") @db.VarChar(20)
+  ORDER_REJECTION_REASON    String?   @db.VarChar(100)
+  ORDER_REJECTION_NOTE      String?   @db.Text
+  REJECTED_DATETIME         DateTime? @db.DateTime(0)
+  ETA_ACKNOWLEDGED_DATETIME DateTime? @db.DateTime(0)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -516,12 +522,37 @@ model business_2_business_category2 {
 }
 
 model business_settings {
-  BUSINESS_SETTINGS_ID     Int      @id @default(autoincrement())
-  BUSINESS_ID              Int      @unique(map: "BusinessSettings_businessId_key")
-  DELIVERY_RANGE_ZIP_CODES String?  @db.Text
-  CREATION_DATETIME        DateTime @default(now()) @db.DateTime(0)
-  LAST_UPDATE_DATETIME     DateTime @default(now()) @db.DateTime(0)
-  business                 business @relation(fields: [BUSINESS_ID], references: [BUSINESS_ID], onDelete: Cascade, map: "BusinessSettings_businessId_fkey")
+  BUSINESS_SETTINGS_ID          Int      @id @default(autoincrement())
+  BUSINESS_ID                   Int      @unique(map: "BusinessSettings_businessId_key")
+  DELIVERY_RANGE_ZIP_CODES      String?  @db.Text
+  CREATION_DATETIME             DateTime @default(now()) @db.DateTime(0)
+  LAST_UPDATE_DATETIME          DateTime @default(now()) @db.DateTime(0)
+  DELIVERY_ENABLED              Int?     @default(1) @db.TinyInt
+  DELIVERY_ZONES_JSON           String?  @db.LongText
+  PICKUP_ENABLED                Int?     @default(0) @db.TinyInt
+  PICKUP_INSTRUCTIONS           String?  @db.Text
+  DEFAULT_PICKUP_PREP_MINUTES   Int?     @default(20)
+  DEFAULT_DELIVERY_PREP_MINUTES Int?     @default(45)
+  business                      business @relation(fields: [BUSINESS_ID], references: [BUSINESS_ID], onDelete: Cascade, map: "BusinessSettings_businessId_fkey")
+}
+
+model business_notification {
+  BUSINESS_NOTIFICATION_ID Int       @id @default(autoincrement())
+  BUSINESS_ID              Int
+  NOTIFICATION_TYPE        String    @db.VarChar(30)
+  TITLE                    String    @db.VarChar(150)
+  MESSAGE                  String?   @db.Text
+  IS_READ                  Int?      @default(0) @db.TinyInt
+  LINK_URL                 String?   @db.VarChar(255)
+  METADATA_JSON            String?   @db.LongText
+  CREATION_DATETIME        DateTime? @default(now()) @db.DateTime(0)
+  EXPIRES_AT               DateTime  @db.DateTime(0)
+  business                 business  @relation(fields: [BUSINESS_ID], references: [BUSINESS_ID], onDelete: Cascade, onUpdate: NoAction, map: "business_notification_business_id_fkey")
+
+  @@index([BUSINESS_ID], map: "idx_business_notification_business_id")
+  @@index([CREATION_DATETIME], map: "idx_business_notification_creation_datetime")
+  @@index([EXPIRES_AT], map: "idx_business_notification_expires_at")
+  @@index([IS_READ], map: "idx_business_notification_is_read")
 }
 
 view adlink_view {
