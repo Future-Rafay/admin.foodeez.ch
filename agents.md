@@ -31,12 +31,14 @@ Important folders:
 - `src/components/providers`: app-wide React providers for auth and selected business context.
 - `src/lib`: Prisma, auth, media, upload, S3, and utility helpers.
 - `src/services`: server helpers for dashboard/business/menu/order/settings data. `src/services/admin-data.ts` owns root dashboard data, selected-business dashboard data, and the current products server actions. `src/services/menu-management.ts` owns the dashboard-scoped Menu Card, Product, Category, and Tag API logic, including ownership checks, relationship shaping, counts, filtering, pagination, ordering, preview shaping, and soft deletes where applicable. `src/services/orders-management.ts` owns Orders management filtering, KPI aggregation, detail shaping, ownership checks, and status transitions. `src/services/settings-management.ts` owns business settings reads/upserts.
-- `prisma`: Prisma schema, generated Prisma client output, and SQL view files.
+- `prisma`: Prisma schema, generated Prisma client output, SQL view files, and hand-created SQL migrations under `prisma/migrations`.
 - `public`: logos, SVGs, and static images.
 
 ## Database Schema
 
 Schema details are intentionally not duplicated here. Use `prisma/schema.prisma` as the source of truth for database models, views, fields, attributes, and relations.
+
+Fulfillment/order notification schema changes are tracked in the hand-created migration `prisma/migrations/20260625030000_add_fulfillment_orders_notifications/migration.sql`. Do not run `prisma migrate` for that file unless the workflow is intentionally changed; apply it manually, then run `npx prisma db pull` and `npx prisma generate`.
 
 ## Route Map
 
@@ -52,14 +54,14 @@ Existing pages:
 - `/dashboard/[businessId]/orders`: selected-business Orders management page. It renders KPI cards, status/date/search filters, a paginated orders table, row actions, and an order detail modal through `AdminOrdersPage`.
 - `/dashboard/[businessId]/menu`: selected-business Menu Cards management page. It server-fetches menu cards through `menu-management.ts` and hydrates `MenuCardsManagement` for status tabs, 3-column desktop card grid, create/edit modal, duplicate, delete, and Manage links.
 - `/dashboard/[businessId]/menu/[cardId]`: selected-business Menu Card detail workspace. It server-fetches the menu card workspace through `menu-management.ts` and hydrates `MenuCardDetailManagement` for draft category assignment, drag reorder, remove, explicit Save/Discard, expandable product preview, and customer preview modal.
-- `/dashboard/[businessId]/menu/products`: selected-business product catalog workspace. It server-fetches products/categories and hydrates `AdminProductsTable` for search, category filtering, sortable table columns, add/edit modal, active/inactive toggle, delete, empty state, and loading skeleton.
+- `/dashboard/[businessId]/menu/products`: selected-business product catalog workspace. It server-fetches products/categories and hydrates `AdminProductsTable` for image thumbnails, search, category filtering, sortable table columns, add/edit modal, active/inactive toggle, delete, empty state, and loading skeleton.
 - `/dashboard/[businessId]/menu/products/new`: add product form.
 - `/dashboard/[businessId]/menu/products/[productId]/edit`: edit product form.
 - `/dashboard/[businessId]/menu/categories`: selected-business category management workspace. It server-fetches categories through `menu-management.ts` and hydrates `CategoryTable` for add/edit modal, tag assignment, product counts, status badges, soft delete, and empty state.
 - `/dashboard/[businessId]/menu/categories/new`: add category form.
 - `/dashboard/[businessId]/menu/categories/[categoryId]/edit`: edit category form.
 - `/dashboard/[businessId]/menu/tags`: selected-business tag management workspace. It server-fetches tags through `menu-management.ts` and hydrates `TagsTable` for add/edit modal, product/category counts, status badges, soft delete, and empty state.
-- `/dashboard/[businessId]/settings`: selected-business settings workspace. It server-fetches business info and delivery-area settings, then hydrates `AdminSettingsForm` for editing comma-separated delivery areas with live badge preview.
+- `/dashboard/[businessId]/settings`: selected-business settings workspace. It server-fetches business info, legacy delivery-area settings, and fulfillment settings, then hydrates `AdminSettingsForm` for Shopify-style local delivery zones, pickup/default prep settings, legacy comma-separated delivery areas, and read-only business info.
 - Legacy standalone product/category route files were removed after moving menu functionality into the `/menu/...` structure.
 
 Existing API routes:
@@ -82,9 +84,18 @@ Existing API routes:
 - `/api/dashboard/[businessId]/menu-cards/[cardId]/details`: authenticated selected-business Menu Card detail list/create route. `GET` returns assigned categories, available categories, and read-only products from the menu-card detail view. `POST` assigns a category to the card.
 - `/api/dashboard/[businessId]/menu-cards/[cardId]/details/[detailId]`: authenticated selected-business Menu Card detail delete route. `DELETE` removes a category assignment from the card.
 - `/api/dashboard/[businessId]/menu-cards/[cardId]/details/reorder`: authenticated selected-business Menu Card detail reorder route. `PATCH` accepts `[ { detailId, displayOrder } ]`.
-- `/api/dashboard/[businessId]/orders`: authenticated selected-business Orders list route. Supports status, date range, search, and page filters and returns KPI data plus paginated order rows.
-- `/api/dashboard/[businessId]/orders/[orderId]/status`: authenticated selected-business order status update route. Accepts `{ status: "preparing" | "ready" | "delivered" | "rejected" }` and validates forward-only transitions.
+- `/api/dashboard/[businessId]/orders`: authenticated selected-business Orders list route. Supports `status`, `dateFrom`, `dateTo`, `search`, `page`, and `limit`. It returns top-level `{ orders, totalCount, page, totalPages, kpi, prepDefaults }`. Order rows include customer fields aliased as `VISITOR_*`, order type, payment mode/status, `FINAL_AMOUNT`, financial summary values, `CREATION_DATETIME`, `DELIVERY_ET`, `ETA_ACKNOWLEDGED_DATETIME`, rejection fields, optional `STAFF_MEMBER`/`TERMINAL`, `item_count`, and all detail rows joined to `business_product` as `product_title`.
+- `/api/dashboard/[businessId]/orders/[orderId]/status`: authenticated selected-business order status update route. Accepts status transitions for delivery (`out_for_delivery`, `delivered`, `rejected`) and pickup (`ready_for_pickup`, `picked_up`, `rejected`), validates ownership, enforces lifecycle transitions, collects rejection reason/note, sets delivered/picked-up payment completion where applicable, and blocks Stripe/card-paid rejection until refund support exists.
+- `/api/dashboard/[businessId]/orders/[orderId]/eta`: authenticated selected-business ETA update route. `PATCH` accepts `{ eta: string }`, validates ownership, sets `DELIVERY_ET`, and marks `ETA_ACKNOWLEDGED_DATETIME`.
+- `/api/dashboard/[businessId]/orders/[orderId]/refund`: authenticated selected-business refund placeholder route. Returns `501` because Stripe refunds are not implemented until `STRIPE_PAYMENT_INTENT_ID` is stored.
+- `/api/dashboard/[businessId]/notifications`: authenticated selected-business notification list route. Supports `unreadOnly=true/false` and `limit`, removes expired rows, returns newest first plus unread count.
+- `/api/dashboard/[businessId]/notifications/[notificationId]/read`: authenticated selected-business notification read route. Marks one notification as read after owner access validation.
+- `/api/dashboard/[businessId]/notifications/read-all`: authenticated selected-business notification bulk read route. Marks all notifications for the business as read.
 - `/api/dashboard/[businessId]/settings`: authenticated selected-business settings route. `GET` returns delivery-area settings; `POST` upserts normalized delivery areas.
+- `/api/dashboard/[businessId]/settings/fulfillment`: authenticated selected-business fulfillment settings route. `GET` returns parsed `DELIVERY_ZONES_JSON` plus pickup/default prep settings. `PATCH` validates owner access, normalizes postal codes, validates CHF prices/free-delivery thresholds, stores zones as JSON text, and updates `LAST_UPDATE_DATETIME`.
+- `/api/businesses/[businessId]/fulfillment-options`: public customer-facing fulfillment options route. Returns delivery/pickup enabled flags, pickup instructions, and default prep minutes.
+- `/api/businesses/[businessId]/delivery-quote`: public customer-facing delivery quote route. Uses `src/lib/fulfillment.ts` to match exact postal codes and wildcard prefix postal codes from `DELIVERY_ZONES_JSON`.
+- `/api/businesses/[businessId]/orders`: public customer-facing order creation route. Computes product subtotal server-side from active business products, validates delivery quotes for delivery orders, stores pickup orders without delivery fees, and writes `business_order` plus detail rows.
 
 Planned or visible-coming-soon areas:
 
@@ -126,8 +137,22 @@ Data and API patterns:
 - Client forms call API routes with `fetch`, JSON bodies, and local loading/error state.
 - Product catalog interactions in `AdminProductsTable` use server actions from `admin-data.ts` for save, toggle status, and soft delete. Category and tag tables use the dashboard-scoped menu API routes.
 - Orders management uses API routes from the `AdminOrdersPage` client island because it needs filter/search pagination and modal-driven status updates.
-- Current order status mapping is `rejected = 0`, `new = 1`, `preparing = 2`, `ready = 3`, and `delivered = 4`. Valid forward transitions are `new -> preparing`, `new -> rejected`, `preparing -> ready`, and `ready -> delivered`.
+- Current order status mapping is `preparing = 1`, `out_for_delivery = 2`, `delivered = 3`, `rejected = 4`, `ready_for_pickup = 5`, and `picked_up = 6`. Valid delivery transitions are `preparing -> out_for_delivery`, `out_for_delivery -> delivered`, and `preparing -> rejected`. Valid pickup transitions are `preparing -> ready_for_pickup`, `ready_for_pickup -> picked_up`, and `preparing -> rejected`.
+- `business_order.ORDER_TYPE` distinguishes fulfillment mode. Allowed app values are `delivery` and `pickup`; default existing orders to `delivery`.
+- Do not add a separate payment-status column. Use `business_order.PAYMENT_DONE` with `0 = pending/unpaid`, `1 = paid`, `2 = refunded`, and `3 = failed`.
+- Use `business_order.DELIVERY_ET` for both estimated delivery time and estimated pickup time. Use `ETA_ACKNOWLEDGED_DATETIME` when the business owner confirms the ETA was seen/accepted.
+- Rejected orders can store structured admin context in `ORDER_REJECTION_REASON`, `ORDER_REJECTION_NOTE`, and `REJECTED_DATETIME`.
+- `src/lib/orderStatus.ts` is the shared source for order status constants, payment constants, labels, badge colors, allowed actions, Stripe/card-paid detection, and transition validation. Use it in admin/dashboard code instead of hand-mapping status numbers.
+- Stripe/card-paid orders with `PAYMENT_DONE = 1` must not be rejected directly. The admin refund endpoint currently returns `501` with the stored-payment-intent explanation; only COD/cash/pay-at-pickup unpaid orders can be rejected immediately.
+- Orders list filtering must not apply a default date range. The default route/UI state should show all existing orders unless `dateFrom`/`dateTo` are explicitly supplied.
+- `src/services/orders-management.ts` logs the raw Prisma `where` clause and distinct raw `ORDER_STATUS` values in development mode; keep that logging when working on order data bugs.
 - The selected-business dashboard recent-orders table uses the same order status mapping through `src/services/admin-data.ts`; never map `ORDER_STATUS = 4` to cancelled/rejected because it means delivered.
+- `business_settings.DELIVERY_RANGE_ZIP_CODES` is retained for backward compatibility. New delivery-zone work should prefer `DELIVERY_ZONES_JSON`, with `DELIVERY_ENABLED`, `PICKUP_ENABLED`, `PICKUP_INSTRUCTIONS`, `DEFAULT_PICKUP_PREP_MINUTES`, and `DEFAULT_DELIVERY_PREP_MINUTES` for fulfillment settings.
+- Customer-facing fulfillment calculations belong in `src/lib/fulfillment.ts`. Reuse `calculateDeliveryQuote` for checkout and public quote APIs so delivery availability, free delivery, and minimum-order behavior stay identical.
+- Checkout order creation sets `ORDER_TYPE` to `delivery` or `pickup`, `ORDER_STATUS = 1`, `DELIVERY_ET = null`, and `ETA_ACKNOWLEDGED_DATETIME = null`. Delivery orders require `ADDRESS_ZIP`, validate it through `calculateDeliveryQuote`, and include `SHIPPING_CHARGES` in `ORDER_FINAL_AMOUNT`; pickup orders use `SHIPPING_CHARGES = 0`.
+- Payment state stays in `PAYMENT_DONE`: Stripe orders are saved as `1`; cash on delivery and pay-at-pickup orders start as `0`.
+- Business notifications live in `business_notification` and are scoped by `BUSINESS_ID`. Allowed app values for `NOTIFICATION_TYPE` are `order`, `refund`, `system`, `menu`, and `payment`; notification payload extras belong in `METADATA_JSON`.
+- `src/lib/businessNotifications.ts` owns notification creation. New checkout orders create an `order` notification with a dashboard orders link and order metadata; rejected orders create an `order` notification with the rejection reason.
 
 Naming:
 
@@ -159,6 +184,7 @@ Shared UI components:
 - Components expose typed props and forward standard HTML props where practical.
 - Common primitives include buttons, cards, tables, dialogs, dropdowns, tabs, inputs, labels, textarea, badges, avatar, skeleton, alerts, sheets, selects, switches, and upload fields.
 - `ImageUploadField` is the shared image picker/preview control used by product/category forms.
+- `ImageUploadField` supports pasted image URLs and file selection. Product forms save the resolved URL/key through `business_product.PIC`; invalid or empty image URLs should render the placeholder preview instead of a broken image.
 
 Core layout components:
 
@@ -168,6 +194,7 @@ Core layout components:
 - `AdminSidebar` footer renders the authenticated owner from NextAuth session data, including profile image when available or an initials avatar, truncated owner name, and logout action.
 - `AdminMobileDrawer` provides the hamburger-triggered slide-in navigation on small screens, reusing the sidebar nav items with visible labels and closing on outside click or Escape. The mobile drawer uses a fixed full-height panel and fixed backdrop.
 - `AdminHeader` auto-generates breadcrumbs and the page title from route segments. It includes a static notification button and a Quick Actions dropdown linking to new product, new category, and orders routes.
+- `AdminHeader` auto-generates breadcrumbs and the page title from route segments. It includes the business notification bell/dropdown with unread count, 30-second polling, mark-read behavior, browser Notification API prompts, and a Quick Actions dropdown linking to new product, new category, and orders routes.
 - `Navbar` and `Footer` are no longer used by the selected-business layout; they may still be used by public or other non-admin surfaces.
 - `DashboardNavbar`, `DashboardFooter`, and `DashboardBreadcrumb` are used by the root dashboard.
 - `LoadingSpinner` and skeletons provide loading states.
@@ -187,6 +214,7 @@ Menu-card-management components:
 Product-management components:
 
 - `AdminProductsTable` is the current Shopify-style product catalog UI for `/dashboard/[businessId]/menu/products`. It receives server-fetched rows and category options, then handles search, category filter, sorting, add/edit modal, status toggle, and delete as a client island.
+- Product images use the real schema field `business_product.PIC`, mapped by `src/services/admin-data.ts` to `AdminProductRow.imageUrl`. Product table thumbnails should use that `imageUrl` alias with `resolveMediaUrl`, rounded 40-48px object-cover display, product-title alt text, and a placeholder fallback.
 - Product category display/filtering in `AdminProductsTable` is inferred from overlapping product tags and category tags because `business_product` does not have a direct category foreign key.
 - `CategoryTable` and `TagsTable` are current selected-business client islands for category/tag management and expect server-provided rows from `menu-management.ts`.
 - `ProductTable`, `DeleteProductModal`, and the legacy root `/api/products` flows remain older product-management surfaces; prefer `AdminProductsTable` and dashboard-scoped APIs for current selected-business work.
@@ -198,15 +226,20 @@ Product-management components:
 
 Settings components:
 
-- `AdminSettingsForm` is the selected-business settings client island. It edits comma-separated delivery areas, shows a live badge preview, saves through `/api/dashboard/[businessId]/settings`, and renders read-only business name/email fields.
+- `AdminSettingsForm` is the selected-business settings client island. It edits fulfillment settings through `/api/dashboard/[businessId]/settings/fulfillment`, including delivery enabled, delivery zones, pickup enabled, prep-time defaults, and pickup instructions. It also preserves the legacy comma-separated delivery areas editor through `/api/dashboard/[businessId]/settings` and renders read-only business name/email fields.
 
 Orders-management components:
 
 - `AdminOrdersPage` is the Shopify-style Orders UI for `/dashboard/[businessId]/orders`. It owns client-side filter state, pagination state, row action dropdowns, and the order detail modal.
 - Orders list and status changes are fetched through `/api/dashboard/[businessId]/orders` and `/api/dashboard/[businessId]/orders/[orderId]/status`.
-- Orders list defaults to all dates so the table matches the all-time KPI counts; users can still filter to Today, Last 7 days, or Custom.
-- Order detail modal displays order ID, ordered date, status, customer name/phone/address, item rows, delivery fee, order total, and available status action buttons.
-- Dashboard recent-order badges should display `new`, `preparing`, `ready`, `delivered`, and `rejected` consistently with the Orders page.
+- Orders list defaults to all dates so the table does not hide existing historical orders; users can still filter to Today, Last 7 days, or Custom.
+- Orders table columns are Order #, Customer with phone below, Items summary, Total from `FINAL_AMOUNT`, Payment from `PAYMENT_MODE`, Status badge, Ordered at, and Actions.
+- Order detail modal displays order ID, order type, status badge/action buttons, placed time, estimated delivery/pickup time, payment mode/status, optional staff/terminal, rejection reason/note when rejected, full customer contact/address fields, financial summary (`GROSS_AMOUNT`, `DISCOUNT_AMOUNT`, `SHIPPING_AMOUNT`, `TAX_AMOUNT`, `REFUND_AMOUNT`, `FINAL_AMOUNT`), and item rows with product name, quantity, unit price, discount, and computed subtotal.
+- Pickup orders should use the same order detail surface but label `DELIVERY_ET` as estimated pickup time. Delivery orders should continue to label it as estimated delivery time.
+- New preparing orders with `ETA_ACKNOWLEDGED_DATETIME = null` trigger a blocking ETA modal on the Orders page. The modal pre-fills from business settings default prep minutes and saves through the ETA endpoint.
+- Orders management polls the orders API every 30 seconds without resetting selected filters. While an unacknowledged ETA order is active, the page uses a Web Audio API beep every 10 seconds until ETA is saved; show the small enable-sound button when browser autoplay blocks audio.
+- Order status badges should use the shared helper colors: preparing blue, out-for-delivery/ready-for-pickup purple, delivered/picked-up green, rejected red.
+- Dashboard recent-order badges should use the same status mapping as the Orders page through `src/lib/orderStatus.ts`.
 
 ## Practical Guidance For Future Agents
 
@@ -214,6 +247,7 @@ Orders-management components:
 - Keep business-scoped API changes consistent with the existing owner-access authorization flow.
 - Do not introduce a second Prisma client import path.
 - Do not duplicate database schema details here; check `prisma/schema.prisma`.
+- For manual SQL changes, add a timestamped folder under `prisma/migrations` with a `migration.sql` file matching the existing migration layout. Do not run `prisma migrate`, `db pull`, or `generate` unless the user explicitly asks for that step.
 - Preserve existing Foodeez styling tokens and component library usage.
 - For selected-business admin chrome changes, prefer extending `src/components/admin` and keep `src/app/dashboard/[businessId]/layout.tsx` as a thin wrapper around `AdminShell`.
 - For root dashboard, selected-business dashboard, and selected-business Menu/product catalog changes, prefer extending `src/services/admin-data.ts` and the relevant server page before adding client-side fetching.
@@ -222,6 +256,11 @@ Orders-management components:
 - For Menu Card customer visibility, keep admin status and view SQL in sync. Disabled menu cards should not appear through `business_food_menu_card_view`, `business_food_menu_card_detail_view`, or `business_having_active_menu_card_view`.
 - For selected-business Settings behavior, prefer extending `src/services/settings-management.ts` and `AdminSettingsForm`.
 - For Orders management changes, prefer extending `src/services/orders-management.ts` so the page UI and API routes share the same status mapping, filtering, authorization, and transition rules.
+- For order lifecycle work, keep status constants, labels, badge colors, and transition rules in `src/lib/orderStatus.ts`; do not duplicate raw status-number maps in components.
+- For fulfillment settings, preserve legacy ZIP-code behavior while adding delivery zones and pickup options. Treat `DELIVERY_ZONES_JSON` as app-owned JSON text, not as a normalized relational model unless a future migration explicitly changes that.
+- Keep fulfillment settings UI lean: avoid rendering the same editable setting in multiple sections, and keep legacy delivery-area controls secondary to the new delivery-zone workflow unless backward-compatibility work explicitly needs them front and center.
+- For checkout fulfillment support, keep the calculation rules in `src/lib/fulfillment.ts` and have routes call the helper instead of duplicating postal-code matching or pricing rules.
+- For notification work, keep notification reads, unread counts, expiry filtering, and links business-scoped through `business_notification.BUSINESS_ID`.
 - When adding product category behavior, remember that categories are not directly linked from `business_product`; check `prisma/schema.prisma` and the current tag-inference approach before changing assumptions.
 - For media changes, use the existing upload utilities and S3 storage helpers.
 - For new dashboard sections, follow the selected-business route structure under `src/app/dashboard/[businessId]`.
